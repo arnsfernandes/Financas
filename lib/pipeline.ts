@@ -4,9 +4,8 @@ import { save } from './persist'
 import type { StoredReceipt } from './schema'
 
 /**
- * The end-to-end scan pipeline: store the original, run the vision call, and
- * persist the validated result. Both the single-scan and batch routes call
- * this so there is exactly one path through the system.
+ * The end-to-end scan pipeline for images: store the original, run the AI call, and
+ * persist the validated result.
  */
 export async function processReceipt(
   buffer: Buffer,
@@ -14,7 +13,15 @@ export async function processReceipt(
 ): Promise<StoredReceipt> {
   const stored = await store(buffer, contentType)
   const { receipt } = await scanReceipt(buffer, contentType)
-  return save({ receipt, imageKey: stored.key, imageSha256: stored.sha256 })
+  return save({ receipt, imageKey: stored.key, imageSha256: stored.sha256, sourceType: 'image' })
+}
+
+/**
+ * Process a text-based expense description into a persisted, structured receipt.
+ */
+export async function processTextExpense(text: string): Promise<StoredReceipt> {
+  const { receipt } = await scanReceipt(text)
+  return save({ receipt, imageKey: null, imageSha256: null, sourceType: 'text' })
 }
 
 export interface BatchItemResult {

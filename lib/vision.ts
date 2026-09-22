@@ -1,19 +1,27 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import sharp from 'sharp'
 import { normaliseReceipt, type Receipt } from './schema'
 
-const VISION_MODEL = process.env.VISION_MODEL || 'claude-opus-4-7'
-const MAX_PX = parseInt(process.env.MAX_IMAGE_PX || '2576', 10)
+const VISION_MODEL = process.env.VISION_MODEL || 'gpt-4o'
+const MAX_PX = parseInt(process.env.MAX_IMAGE_PX || '2048', 10)
 
-const SYSTEM_PROMPT = `You are a receipt OCR system. You are shown a photograph or scan of a single receipt and you extract its contents.
+const SYSTEM_PROMPT = `You are an intelligent expense and purchase parser.
+You extract structured financial data from any input:
+- Photographs or scans of printed receipts or invoices (notas fiscais)
+- Photographs of handwritten text, purchase notes, or shopping lists
+- Any image containing purchase or transaction information
+- Raw typed or spoken text descriptions of purchases and expenses
 
 Rules:
-- Use null for any field that is not visible. Never guess or invent a value.
-- Strip currency symbols from numeric fields. Put the ISO 4217 code (GBP, EUR, USD, INR, ...) in the currency field; if only a symbol is visible, map it (£ -> GBP, € -> EUR, $ -> USD, ₹ -> INR).
-- Dates are ISO 8601 (YYYY-MM-DD). Convert DD/MM/YYYY and MM/DD/YYYY using the vendor locale where it is unambiguous, otherwise leave the date null.
+- Infer or categorize the overall transaction category (e.g. "Groceries", "Dining", "Transportation", "Utilities", "Office Supplies", "Health", "Entertainment", "Electronics") in the 'category' field.
+- For each item, infer a sensible item category (e.g. "Dairy", "Produce", "Bakery", "Beverages", "Pharmacy", "Hardware") in item.category.
+- If quantity is not explicitly stated but an item exists, default quantity to 1.
+- If total of an item is not given but unit_price and quantity exist, calculate it; or vice-versa.
+- If total amount of the transaction is not explicitly stated, calculate it from items, subtotal, tax, and tip.
+- Strip currency symbols from numeric fields. Map visible symbols to ISO 4217 code (£ -> GBP, € -> EUR, $ -> USD, R$ -> BRL, ₹ -> INR, etc.). Default to null if unknown.
+- Dates must be ISO 8601 (YYYY-MM-DD). If year is omitted in text, assume current context if unambiguous.
 - Times are 24-hour HH:MM.
-- items: one entry per purchased line, even abbreviated ones. Keep the printed description verbatim.
-- Read faded thermal print and small tax-breakdown print as carefully as you can.`
+- Use null for any field that cannot be determined or inferred with reasonable certainty. Never invent arbitrary vendors or prices.`
 
 export interface ScanResult {
   receipt: Receipt
@@ -21,13 +29,6 @@ export interface ScanResult {
   usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number }
 }
 
-/**
- * The structured-output schema handed to the model. It mirrors `receiptSchema`
- * in lib/schema.ts by hand rather than deriving it, because the SDK's Zod->JSON
- * Schema helper requires Zod 4 and the project pins Zod 3. Keep the two in sync:
- * any field added here must be added there and vice versa. The model is
- * constrained to emit exactly this shape, so the response is already valid JSON.
- */
 const nullableNumber = { type: ['number', 'null'] }
 const nullableString = { type: ['string', 'null'] }
 
@@ -40,6 +41,7 @@ const RECEIPT_JSON_SCHEMA = {
     date: nullableString,
     time: nullableString,
     currency: nullableString,
+    category: nullableString,
     items: {
       type: 'array',
       items: {
@@ -50,8 +52,9 @@ const RECEIPT_JSON_SCHEMA = {
           quantity: nullableNumber,
           unit_price: nullableNumber,
           total: nullableNumber,
+          category: nullableString,
         },
-        required: ['description', 'quantity', 'unit_price', 'total'],
+        required: ['description', 'quantity', 'unit_price', 'total', 'category'],
       },
     },
     subtotal: nullableNumber,
@@ -67,6 +70,7 @@ const RECEIPT_JSON_SCHEMA = {
     'date',
     'time',
     'currency',
+    'category',
     'items',
     'subtotal',
     'tax',
@@ -77,22 +81,21 @@ const RECEIPT_JSON_SCHEMA = {
   ],
 } as const
 
-let cachedClient: Anthropic | null = null
+let cachedClient: OpenAI | null = null
 
-function client(): Anthropic {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is not set')
+function client(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not set')
   }
   if (!cachedClient) {
-    cachedClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    cachedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   }
   return cachedClient
 }
 
 /**
- * Downscale and re-encode an image to keep the vision request cheap and fast.
- * Opus 4.7 reads up to 2576px on the long edge at full fidelity, so I default
- * there rather than the old 1568px cap. The result is always JPEG.
+ * Downscale and re-encode an image to keep the request cheap and fast.
+ * The result is always JPEG.
  */
 export async function preprocessImage(buffer: Buffer): Promise<Buffer> {
   return sharp(buffer)
@@ -102,61 +105,76 @@ export async function preprocessImage(buffer: Buffer): Promise<Buffer> {
     .toBuffer()
 }
 
+export type ScanInput = Buffer | string
+
 /**
- * The single vision call. One image in, one validated `Receipt` out.
+ * The single intelligence call. Accepts an image (Buffer) or typed text (string),
+ * and returns a normalised, categorized `Receipt`.
  *
- * The model is constrained with the Zod schema via structured outputs, so the
- * response is already valid JSON in the exact shape; I parse it through Zod
- * again as a belt-and-braces boundary. The system prompt carries a cache
- * breakpoint because it is identical on every scan.
+ * Uses OpenAI Chat Completions / Structured Outputs.
  *
  * Pass a client to inject a stub in tests; production omits it.
  */
 export async function scanReceipt(
-  buffer: Buffer,
+  input: ScanInput,
   _mediaType?: string,
-  anthropic: Anthropic = client(),
+  openai: OpenAI = client(),
 ): Promise<ScanResult> {
-  const jpeg = await preprocessImage(buffer)
-  const imageBase64 = jpeg.toString('base64')
+  const isImage = Buffer.isBuffer(input)
 
-  const message = await anthropic.beta.messages.create({
+  const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = []
+
+  if (isImage) {
+    const jpeg = await preprocessImage(input)
+    const imageBase64 = jpeg.toString('base64')
+    userContent.push(
+      { type: 'text', text: 'Extract and categorize this expense/receipt.' },
+      {
+        type: 'image_url',
+        image_url: {
+          url: `data:image/jpeg;base64,${imageBase64}`,
+        },
+      },
+    )
+  } else {
+    userContent.push({
+      type: 'text',
+      text: `Extract and categorize the following purchase / expense description:\n\n${input}`,
+    })
+  }
+
+  const response = await openai.chat.completions.create({
     model: VISION_MODEL,
-    max_tokens: 4096,
-    betas: ['structured-outputs-2025-09-17'],
-    system: [
-      { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-    ],
     messages: [
       {
+        role: 'system',
+        content: SYSTEM_PROMPT,
+      },
+      {
         role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 },
-          },
-          { type: 'text', text: 'Extract this receipt.' },
-        ],
+        content: userContent,
       },
     ],
-    output_format: { type: 'json_schema', schema: RECEIPT_JSON_SCHEMA },
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'expense_extraction',
+        strict: true,
+        schema: RECEIPT_JSON_SCHEMA,
+      },
+    },
   })
 
-  const text = message.content
-    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim()
-
+  const text = response.choices[0]?.message?.content?.trim() || '{}'
   const receipt = normaliseReceipt(JSON.parse(text))
 
   return {
     receipt,
-    model: message.model,
+    model: response.model,
     usage: {
-      input_tokens: message.usage.input_tokens,
-      output_tokens: message.usage.output_tokens,
-      cache_read_input_tokens: message.usage.cache_read_input_tokens ?? 0,
+      input_tokens: response.usage?.prompt_tokens ?? 0,
+      output_tokens: response.usage?.completion_tokens ?? 0,
+      cache_read_input_tokens: response.usage?.prompt_tokens_details?.cached_tokens ?? 0,
     },
   }
 }
