@@ -440,6 +440,9 @@ export function TransactionsTab({
         setSelectedDrawerTx(null)
       }
       setSelectedGroupDetails((prev) => prev.filter((p) => p.id !== id))
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao excluir lançamento'
+      alert(msg)
     } finally {
       setDeletingTxId(null)
     }
@@ -448,7 +451,11 @@ export function TransactionsTab({
   async function handleDeleteGroup(groupId: string) {
     if (!groupId || deletingGroupId || deletingTxId) return
 
-    const count = selectedInstallmentGroup?.installmentCount || selectedGroupDetails.length
+    const count =
+      selectedInstallmentGroup?.installmentCount ||
+      selectedGroupDetails.length ||
+      selectedDrawerTx?.installment_total ||
+      'todas as'
     const confirmMsg = `Excluir compra parcelada? As ${count} parcelas deste lançamento serão excluídas.`
 
     if (!window.confirm(confirmMsg)) return
@@ -468,6 +475,9 @@ export function TransactionsTab({
       }
       setSelectedInstallmentGroup(null)
       setSelectedGroupDetails([])
+      if (selectedDrawerTx?.installment_group_id === groupId) {
+        setSelectedDrawerTx(null)
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro ao excluir compra parcelada'
       setGroupDeleteError(msg)
@@ -925,11 +935,11 @@ export function TransactionsTab({
           onClick={() => setSelectedInstallmentGroup(null)}
         >
           <div
-            className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200"
+            className="w-full max-w-lg bg-white h-full max-h-[100dvh] shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabeçalho do Drawer de Parcelamento */}
-            <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
+            <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-amber-50 text-amber-700">
                   <CreditCard className="w-5 h-5" />
@@ -954,7 +964,7 @@ export function TransactionsTab({
             </div>
 
             {/* Conteúdo com a Lista de Parcelas */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
               {groupDeleteError && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
                   {groupDeleteError}
@@ -1046,7 +1056,7 @@ export function TransactionsTab({
                               type="button"
                               disabled={Boolean(deletingGroupId) || deletingTxId === inst.id}
                               onClick={(e) => handleDelete(e, inst.id, `Parcela ${cur} de ${selectedInstallmentGroup.vendor}`)}
-                              className="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                              className="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                               title="Excluir esta parcela"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1062,12 +1072,12 @@ export function TransactionsTab({
             </div>
 
             {/* Rodapé do Drawer */}
-            <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between gap-3">
+            <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between gap-3 shrink-0">
               <button
                 type="button"
                 disabled={Boolean(deletingGroupId) || Boolean(deletingTxId)}
                 onClick={() => handleDeleteGroup(selectedInstallmentGroup.groupId)}
-                className="py-2 px-3.5 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="py-2 px-3.5 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
                 title="Excluir todas as parcelas desta compra"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1081,7 +1091,7 @@ export function TransactionsTab({
                   setSelectedInstallmentGroup(null)
                 }}
                 disabled={Boolean(deletingGroupId)}
-                className="py-2 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer"
+                className="py-2 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
               >
                 Fechar
               </button>
@@ -1097,11 +1107,11 @@ export function TransactionsTab({
           onClick={() => setSelectedDrawerTx(null)}
         >
           <div
-            className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200"
+            className="w-full max-w-md bg-white h-full max-h-[100dvh] shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Cabeçalho do Drawer */}
-            <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between">
+            <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div
                   className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
@@ -1136,7 +1146,7 @@ export function TransactionsTab({
             </div>
 
             {/* Conteúdo do Drawer */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-[#374151]">
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-6 text-xs text-[#374151]">
               {/* Valor Principal em Destaque */}
               <div className="text-center py-2 bg-[#F9FAFB] rounded-2xl border border-[#EBEEF2] p-4">
                 <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
@@ -1155,6 +1165,28 @@ export function TransactionsTab({
                     'Sem estabelecimento'}
                 </span>
               </div>
+
+              {/* Informações de Parcelamento se aplicável */}
+              {selectedDrawerTx.installment_group_id && (selectedDrawerTx.installment_total || 0) > 1 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-xs text-amber-900">
+                  <div className="min-w-0">
+                    <span className="font-semibold block">Compra Parcelada</span>
+                    <span className="text-[11px] text-amber-700">
+                      Parcela {selectedDrawerTx.installment_current || 1} de {selectedDrawerTx.installment_total}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={Boolean(deletingGroupId) || deletingTxId === selectedDrawerTx.id}
+                    onClick={() => handleDeleteGroup(selectedDrawerTx.installment_group_id!)}
+                    className="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                    title="Excluir todas as parcelas deste parcelamento"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingGroupId === selectedDrawerTx.installment_group_id ? 'Excluindo…' : 'Excluir compra'}
+                  </button>
+                </div>
+              )}
 
               {/* Informações Gerais */}
               <div className="space-y-3">
@@ -1301,21 +1333,24 @@ export function TransactionsTab({
             </div>
 
             {/* Rodapé de Ações do Drawer */}
-            <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center gap-3">
+            <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center gap-3 shrink-0">
               <button
+                type="button"
                 onClick={(e) => handleStartEditing(e, selectedDrawerTx)}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <Edit2 className="w-3.5 h-3.5" />
                 Editar Lançamento
               </button>
               <button
+                type="button"
                 onClick={(e) => handleDelete(e, selectedDrawerTx.id, selectedDrawerTx.vendor)}
-                disabled={deletingTxId === selectedDrawerTx.id}
-                className="p-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-40"
-                title="Excluir lançamento"
+                disabled={deletingTxId === selectedDrawerTx.id || Boolean(deletingGroupId)}
+                className="py-2.5 px-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0"
+                title="Excluir este lançamento"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
+                {deletingTxId === selectedDrawerTx.id ? 'Excluindo…' : 'Excluir lançamento'}
               </button>
             </div>
           </div>

@@ -299,12 +299,19 @@ export default function Home() {
       if (data.ok) {
         setTransactions((prev) => prev.filter((t) => t.id !== id))
         if (selectedDrawerTx?.id === id) setSelectedDrawerTx(null)
-        fetchDashboard()
+        await Promise.all([
+          fetchDashboard(periodType, monthOffset),
+          fetchAccounts(),
+        ])
       } else {
-        setTxError(data.error || 'Erro ao excluir transação')
+        const msg = data.error || 'Erro ao excluir transação'
+        setTxError(msg)
+        throw new Error(msg)
       }
-    } catch {
-      setTxError('Erro de conexão ao excluir transação')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro de conexão ao excluir transação'
+      setTxError(msg)
+      throw new Error(msg)
     }
   }
 

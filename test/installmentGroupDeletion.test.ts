@@ -3,12 +3,43 @@ import { NextRequest } from 'next/server'
 import * as queriesModule from '@/lib/queries'
 import * as authGuardModule from '@/lib/authGuard'
 
-describe('Installment Group Deletion', () => {
+describe('Transaction & Installment Group Deletion Actions', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
-  describe('DELETE /api/transactions/installments/[groupId]', () => {
+  describe('Single Transaction Deletion (Normal / à vista)', () => {
+    it('deletes normal transaction deterministically via DELETE /api/transactions/[id]', async () => {
+      vi.spyOn(authGuardModule, 'requireFinancialAuth').mockReturnValue({ authorized: true })
+      const deleteTxSpy = vi.spyOn(queriesModule, 'deleteTransaction').mockResolvedValue(true)
+
+      const { DELETE } = await import('@/app/api/transactions/[id]/route')
+      const req = new NextRequest('http://localhost:3000/api/transactions/tx-normal-1', { method: 'DELETE' })
+      const res = await DELETE(req, { params: { id: 'tx-normal-1' } })
+
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.ok).toBe(true)
+      expect(data.id).toBe('tx-normal-1')
+      expect(deleteTxSpy).toHaveBeenCalledWith('tx-normal-1')
+    })
+
+    it('returns error when single transaction deletion fails', async () => {
+      vi.spyOn(authGuardModule, 'requireFinancialAuth').mockReturnValue({ authorized: true })
+      vi.spyOn(queriesModule, 'deleteTransaction').mockRejectedValue(new Error('Failed to delete transaction'))
+
+      const { DELETE } = await import('@/app/api/transactions/[id]/route')
+      const req = new NextRequest('http://localhost:3000/api/transactions/tx-err', { method: 'DELETE' })
+      const res = await DELETE(req, { params: { id: 'tx-err' } })
+
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(data.ok).toBe(false)
+      expect(data.error).toBe('Failed to delete transaction')
+    })
+  })
+
+  describe('Installment Group Deletion (DELETE /api/transactions/installments/[groupId])', () => {
     it('returns 401/error if not authorized', async () => {
       vi.spyOn(authGuardModule, 'requireFinancialAuth').mockReturnValue({
         authorized: false,
@@ -93,6 +124,22 @@ describe('Installment Group Deletion', () => {
       expect(updatedList.some((t) => t.installment_group_id === 'grp-A')).toBe(false)
       expect(updatedList.filter((t) => t.installment_group_id === 'grp-B').length).toBe(2)
       expect(updatedList.some((t) => t.id === 'tx-single')).toBe(true)
+    })
+
+    it('allows individual installment deletion while keeping remaining installments in the group', () => {
+      const groupInstallments = [
+        { id: 'tx-1', installment_group_id: 'grp-1', installment_current: 1, installment_total: 3, total: 100 },
+        { id: 'tx-2', installment_group_id: 'grp-1', installment_current: 2, installment_total: 3, total: 100 },
+        { id: 'tx-3', installment_group_id: 'grp-1', installment_current: 3, installment_total: 3, total: 100 },
+      ]
+
+      // Delete only installment 2
+      const deletedId = 'tx-2'
+      const remaining = groupInstallments.filter((p) => p.id !== deletedId)
+
+      expect(remaining.length).toBe(2)
+      expect(remaining.map((p) => p.installment_current)).toEqual([1, 3])
+      expect(remaining.every((p) => p.installment_group_id === 'grp-1')).toBe(true)
     })
   })
 })
