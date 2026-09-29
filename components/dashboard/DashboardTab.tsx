@@ -696,7 +696,7 @@ export function DashboardTab({
       {/* DRAWER LATERAL GRANDE: RECEITAS / DESPESAS DA VISÃO GERAL */}
       {drawerType && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
+          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
           onClick={() => setDrawerType(null)}
         >
           <div

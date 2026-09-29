@@ -975,7 +975,7 @@ export function AccountsTab({
       {/* ======================================================== */}
       {drawerOpen && selectedAccount && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setDrawerOpen(false)}
         >
           <div
@@ -1582,7 +1582,7 @@ export function AccountsTab({
       {/* ======================================================== */}
       {reserveDrawerOpen && selectedReserve && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
           onClick={() => setReserveDrawerOpen(false)}
         >
           <div
@@ -1839,7 +1839,7 @@ export function AccountsTab({
       {/* ======================================================== */}
       {movementModalOpen && selectedReserve && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={() => setMovementModalOpen(false)}
         >
           <div
@@ -2005,7 +2005,7 @@ export function AccountsTab({
       {/* ======================================================== */}
       {reserveModalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={() => setReserveModalOpen(false)}
         >
           <div
@@ -2141,7 +2141,7 @@ export function AccountsTab({
       {/* ======================================================== */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
           onClick={() => setModalOpen(false)}
         >
           <div

@@ -931,7 +931,7 @@ export function TransactionsTab({
       {/* 4. DRAWER / MODAL: DETALHES DE COMPRA PARCELADA */}
       {selectedInstallmentGroup && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
+          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
           onClick={() => setSelectedInstallmentGroup(null)}
         >
           <div
@@ -972,17 +972,33 @@ export function TransactionsTab({
               )}
 
               {/* Card Resumo do Parcelamento */}
-              <div className="p-4 bg-[#F9FAFB] border border-[#EBEEF2] rounded-2xl text-center">
-                <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
-                  Valor Total da Compra
-                </span>
-                <span className="text-2xl font-extrabold tracking-tight text-[#111827] block">
-                  - {formatBRL(selectedInstallmentGroup.totalPurchaseAmount)}
-                </span>
-                <span className="text-xs text-[#6B7280] mt-1 block">
-                  {selectedInstallmentGroup.installmentCount} parcelas de{' '}
-                  {formatBRL(selectedInstallmentGroup.installmentAmount)}
-                </span>
+              <div className="p-4 bg-[#F9FAFB] border border-[#EBEEF2] rounded-2xl text-center space-y-3">
+                <div>
+                  <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
+                    Valor Total da Compra
+                  </span>
+                  <span className="text-2xl font-extrabold tracking-tight text-[#111827] block">
+                    - {formatBRL(selectedInstallmentGroup.totalPurchaseAmount)}
+                  </span>
+                  <span className="text-xs text-[#6B7280] mt-1 block">
+                    {selectedInstallmentGroup.installmentCount} parcelas de{' '}
+                    {formatBRL(selectedInstallmentGroup.installmentAmount)}
+                  </span>
+                </div>
+
+                {/* Ação de exclusão em destaque no corpo */}
+                <div className="pt-2 border-t border-[#EBEEF2]/70 flex justify-center">
+                  <button
+                    type="button"
+                    disabled={Boolean(deletingGroupId) || Boolean(deletingTxId)}
+                    onClick={() => handleDeleteGroup(selectedInstallmentGroup.groupId)}
+                    className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+                    title="Excluir todas as parcelas desta compra parcelada"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    {deletingGroupId === selectedInstallmentGroup.groupId ? 'Excluindo compra…' : 'Excluir compra'}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -1077,7 +1093,7 @@ export function TransactionsTab({
                 type="button"
                 disabled={Boolean(deletingGroupId) || Boolean(deletingTxId)}
                 onClick={() => handleDeleteGroup(selectedInstallmentGroup.groupId)}
-                className="py-2 px-3.5 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
+                className="py-2.5 px-4 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
                 title="Excluir todas as parcelas desta compra"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1091,7 +1107,7 @@ export function TransactionsTab({
                   setSelectedInstallmentGroup(null)
                 }}
                 disabled={Boolean(deletingGroupId)}
-                className="py-2 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+                className="py-2.5 px-5 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
               >
                 Fechar
               </button>
@@ -1103,7 +1119,7 @@ export function TransactionsTab({
       {/* 5. DRAWER: DETALHES DE LANÇAMENTO INDIVIDUAL */}
       {selectedDrawerTx && (
         <div
-          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
+          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
           onClick={() => setSelectedDrawerTx(null)}
         >
           <div
@@ -1148,43 +1164,72 @@ export function TransactionsTab({
             {/* Conteúdo do Drawer */}
             <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-6 text-xs text-[#374151]">
               {/* Valor Principal em Destaque */}
-              <div className="text-center py-2 bg-[#F9FAFB] rounded-2xl border border-[#EBEEF2] p-4">
-                <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
-                  {selectedDrawerTx.type === 'income' ? 'Valor Recebido' : 'Valor Total'}
-                </span>
-                <span
-                  className={`text-2xl font-extrabold tracking-tight block ${
-                    selectedDrawerTx.type === 'income' ? 'text-emerald-600' : 'text-[#111827]'
-                  }`}
-                >
-                  {selectedDrawerTx.type === 'income' ? '+' : '-'} {formatBRL(selectedDrawerTx.total)}
-                </span>
-                <span className="text-[11px] text-[#6B7280] mt-1 block">
-                  {selectedDrawerTx.canonical_vendors?.canonical_name ||
-                    selectedDrawerTx.vendor ||
-                    'Sem estabelecimento'}
-                </span>
+              <div className="text-center py-2 bg-[#F9FAFB] rounded-2xl border border-[#EBEEF2] p-4 space-y-2">
+                <div>
+                  <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
+                    {selectedDrawerTx.type === 'income' ? 'Valor Recebido' : 'Valor Total'}
+                  </span>
+                  <span
+                    className={`text-2xl font-extrabold tracking-tight block ${
+                      selectedDrawerTx.type === 'income' ? 'text-emerald-600' : 'text-[#111827]'
+                    }`}
+                  >
+                    {selectedDrawerTx.type === 'income' ? '+' : '-'} {formatBRL(selectedDrawerTx.total)}
+                  </span>
+                  <span className="text-[11px] text-[#6B7280] mt-1 block">
+                    {selectedDrawerTx.canonical_vendors?.canonical_name ||
+                      selectedDrawerTx.vendor ||
+                      'Sem estabelecimento'}
+                  </span>
+                </div>
+
+                {/* Botões de Ação Imediatos no topo do conteúdo */}
+                <div className="pt-2 border-t border-[#EBEEF2]/80 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => handleStartEditing(e, selectedDrawerTx)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, selectedDrawerTx.id, selectedDrawerTx.vendor)}
+                    disabled={deletingTxId === selectedDrawerTx.id || Boolean(deletingGroupId)}
+                    className="py-2 px-3 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0"
+                    title="Excluir este lançamento"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingTxId === selectedDrawerTx.id ? 'Excluindo…' : 'Excluir lançamento'}
+                  </button>
+                </div>
               </div>
 
               {/* Informações de Parcelamento se aplicável */}
               {selectedDrawerTx.installment_group_id && (selectedDrawerTx.installment_total || 0) > 1 && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-xs text-amber-900">
-                  <div className="min-w-0">
-                    <span className="font-semibold block">Compra Parcelada</span>
-                    <span className="text-[11px] text-amber-700">
-                      Parcela {selectedDrawerTx.installment_current || 1} de {selectedDrawerTx.installment_total}
-                    </span>
+                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-2.5 text-xs text-amber-900">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="font-semibold block">Compra Parcelada</span>
+                      <span className="text-[11px] text-amber-700">
+                        Parcela {selectedDrawerTx.installment_current || 1} de {selectedDrawerTx.installment_total}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={Boolean(deletingGroupId) || deletingTxId === selectedDrawerTx.id}
+                      onClick={() => handleDeleteGroup(selectedDrawerTx.installment_group_id!)}
+                      className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
+                      title="Excluir todas as parcelas deste parcelamento"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {deletingGroupId === selectedDrawerTx.installment_group_id ? 'Excluindo…' : 'Excluir compra'}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={Boolean(deletingGroupId) || deletingTxId === selectedDrawerTx.id}
-                    onClick={() => handleDeleteGroup(selectedDrawerTx.installment_group_id!)}
-                    className="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
-                    title="Excluir todas as parcelas deste parcelamento"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    {deletingGroupId === selectedDrawerTx.installment_group_id ? 'Excluindo…' : 'Excluir compra'}
-                  </button>
+                  <p className="text-[11px] text-amber-800">
+                    Use &ldquo;Excluir lançamento&rdquo; para remover apenas esta parcela ou &ldquo;Excluir compra&rdquo; para remover o grupo inteiro.
+                  </p>
                 </div>
               )}
 

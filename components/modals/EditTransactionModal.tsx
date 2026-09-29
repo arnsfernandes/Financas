@@ -309,7 +309,7 @@ export function EditTransactionModal({
   const itemsTotalSum = editingTx.items.reduce((acc, it) => acc + (parseFloat(String(it.total)) || 0), 0)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
       <div className="bg-white border border-[#EBEEF2] rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-150">
         {/* Cabeçalho */}
         <div className="px-5 py-4 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
