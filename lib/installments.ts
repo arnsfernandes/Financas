@@ -74,22 +74,21 @@ export function parseInstallmentFromText(
   // Check purchase vs current installment anchor indicators
   const isPurchaseAnchor = /\b(primeira\s+parcela|1[aªº]\s+parcela|parcela\s+1\b|compra(?:\s+(?:feita|realizada))?\s*(?:em\b|no\s+dia\b|:|\/|\d{1,2}[/-]\d{1,2})|comprad[oa]\s+em|data\s+da\s+compra|in[ií]cio\s+em|iniciando\s+em|come[cç]ou\s+em|a\s+partir\s+de|primeira\s+parcela\/compra|compra\/primeira\s+parcela)\b/i.test(text) ||
     /\b1\s*(?:\/|\s+de\s+)\d{1,2}\s*(?:em|no\s+dia|:)\b/i.test(text)
-  const isCurrentAnchor = /\b(parcela\s+atual|atual(?:\s+em|\s*:)?|vencimento\s+atual|fatura\s+atual|parcela\s+(?:deste|do)\s+m[eê]s)\b/i.test(text)
+  const isExplicitCurrentAnchor = /\b(data\s+da\s+parcela\s+atual|vencimento\s+(?:da\s+parcela\s+atual|atual)|fatura\s+atual\s*(?:em|no\s+dia|de)|parcela\s+atual\s*(?:em|no\s+dia|do\s+dia|de)\s+\d{1,2}[/-]\d{1,2})\b/i.test(text)
 
-  // e.g. "parcela 4/6", "4/6", "parcela 4 de 6", "4 de 6"
-  const mFraction = sanitized.match(/\b(?:parcela\s+)?(\d{1,2})\s*(?:\/|\s+de\s+)(\d{1,2})\b/i)
+  // Canonical rule: date represents purchase/1st installment date by default.
+  // Only calculate backwards when current_installment is explicitly indicated.
+  let anchor: InstallmentDateAnchor = 'purchase_date'
+  if (isExplicitCurrentAnchor && !isPurchaseAnchor) {
+    anchor = 'current_installment'
+  }
+
+  // e.g. "parcela 4/6", "4/6", "parcela 4 de 6", "4 de 6", "atual 4/4", "parcela atual 4/4"
+  const mFraction = sanitized.match(/\b(?:parcela\s+|atual\s+|parcela\s+atual\s+)?(\d{1,2})\s*(?:\/|\s+de\s+)(\d{1,2})\b/i)
   if (mFraction) {
     const curr = parseInt(mFraction[1], 10)
     const tot = parseInt(mFraction[2], 10)
     if (tot > 1 && curr >= 1 && curr <= tot) {
-      let anchor: InstallmentDateAnchor = 'current_installment'
-      if (isPurchaseAnchor) {
-        anchor = 'purchase_date'
-      } else if (curr === 1) {
-        anchor = 'purchase_date'
-      } else if (isCurrentAnchor) {
-        anchor = 'current_installment'
-      }
       return {
         total: tot,
         current: curr,
@@ -147,20 +146,26 @@ export function resolveInstallmentPlan(input: InstallmentPlanInput): Installment
   }
 
   if (!detectedAnchor) {
-    if (/\b(primeira\s+parcela|1[aªº]\s+parcela|parcela\s+1\b|compra(?:\s+(?:feita|realizada))?\s*(?:em\b|no\s+dia\b|:|\/|\d{1,2}[/-]\d{1,2})|comprad[oa]\s+em|data\s+da\s+compra|in[ií]cio\s+em|iniciando\s+em|come[cç]ou\s+em|a\s+partir\s+de|primeira\s+parcela\/compra|compra\/primeira\s+parcela)\b/i.test(textToCheck) ||
-        /\b1\s*(?:\/|\s+de\s+)\d{1,2}\s*(?:em|no\s+dia|:)\b/i.test(textToCheck)) {
-      detectedAnchor = 'purchase_date'
-    } else if (/\b(parcela\s+atual|atual(?:\s+em|\s*:)?|vencimento\s+atual|fatura\s+atual|parcela\s+(?:deste|do)\s+m[eê]s)\b/i.test(textToCheck)) {
+    const isPurchaseAnchor = /\b(primeira\s+parcela|1[aªº]\s+parcela|parcela\s+1\b|compra(?:\s+(?:feita|realizada))?\s*(?:em\b|no\s+dia\b|:|\/|\d{1,2}[/-]\d{1,2})|comprad[oa]\s+em|data\s+da\s+compra|in[ií]cio\s+em|iniciando\s+em|come[cç]ou\s+em|a\s+partir\s+de|primeira\s+parcela\/compra|compra\/primeira\s+parcela)\b/i.test(textToCheck) ||
+      /\b1\s*(?:\/|\s+de\s+)\d{1,2}\s*(?:em|no\s+dia|:)\b/i.test(textToCheck)
+    const isExplicitCurrentAnchor = /\b(data\s+da\s+parcela\s+atual|vencimento\s+(?:da\s+parcela\s+atual|atual)|fatura\s+atual\s*(?:em|no\s+dia|de)|parcela\s+atual\s*(?:em|no\s+dia|do\s+dia|de)\s+\d{1,2}[/-]\d{1,2})\b/i.test(textToCheck)
+
+    if (isExplicitCurrentAnchor && !isPurchaseAnchor) {
       detectedAnchor = 'current_installment'
+    } else {
+      detectedAnchor = 'purchase_date'
     }
   }
 
   const isMultiInstallment = typeof totalInstallments === 'number' && totalInstallments > 1
 
   const safeCurrent = currentInstallment ?? 1
-  const effectiveAnchor: InstallmentDateAnchor = input.installmentDateAnchor
-    || detectedAnchor
-    || (input.existingTx?.installment_group_id ? 'current_installment' : 'purchase_date')
+  // Canonical rule: absent, null, undefined or ambiguous anchor is always purchase_date.
+  // Only explicitly set current_installment calculates backward.
+  const effectiveAnchor: InstallmentDateAnchor =
+    (input.installmentDateAnchor === 'current_installment' || detectedAnchor === 'current_installment')
+      ? 'current_installment'
+      : 'purchase_date'
 
   if (!isMultiInstallment) {
     const existingGroupId = input.installmentGroupId || input.existingTx?.installment_group_id || null

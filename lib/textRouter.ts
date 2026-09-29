@@ -139,7 +139,7 @@ export function normalizeText(text: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\w\s$,.]/g, ' ')
+    .replace(/[^\w\s$,./-]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -355,8 +355,13 @@ export function parseSingleTransactionLocally(
     return { success: false }
   }
 
+  // Mask full dates and installment fractions so digits inside them are not confused with monetary amounts
+  const textWithoutDatesOrFractions = norm
+    .replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, ' ')
+    .replace(/\b(?:parcela\s+|atual\s+|parcela\s+atual\s+)?\d{1,2}\s*(?:\/|\s+de\s+)\d{1,2}\b/gi, ' ')
+
   // Check multiple distinct currency/amount occurrences
-  const allAmountMatches = norm.match(/(?:r\$\s*|reais\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:reais|r\$)?/gi) || []
+  const allAmountMatches = textWithoutDatesOrFractions.match(/(?:r\$\s*|reais\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:reais|r\$)?/gi) || []
   const numbersFound: number[] = []
   for (const m of allAmountMatches) {
     const cleanNum = m.replace(/[^\d.,]/g, '').replace(',', '.')
@@ -386,10 +391,10 @@ export function parseSingleTransactionLocally(
   // 2. Extract Value / Total
   let total: number | null = null
   const amountPattern = /(?:r\$\s*|reais\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:reais|r\$)?/i
-  const valMatch = norm.match(amountPattern)
+  const valMatch = textWithoutDatesOrFractions.match(amountPattern)
   if (valMatch) {
     // Search the primary amount from text tokens
-    for (const token of norm.split(' ')) {
+    for (const token of textWithoutDatesOrFractions.split(' ')) {
       const tClean = token.replace(/^r\$/i, '').replace(/reais$/i, '').trim()
       if (/^\d+([.,]\d{1,2})?$/.test(tClean)) {
         const parsed = parseFloat(tClean.replace(',', '.'))
@@ -422,13 +427,23 @@ export function parseSingleTransactionLocally(
     d.setDate(d.getDate() + 1)
     date = d.toISOString().slice(0, 10)
   } else {
-    // Explicit date format: DD/MM or DD/MM/YYYY
-    const dateMatch = norm.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/)
-    if (dateMatch) {
-      const d = String(dateMatch[1]).padStart(2, '0')
-      const m = String(dateMatch[2]).padStart(2, '0')
-      const y = dateMatch[3] ? (dateMatch[3].length === 2 ? `20${dateMatch[3]}` : dateMatch[3]) : dateCtx.date.slice(0, 4)
+    // Explicit full date: DD/MM/YYYY or DD-MM-YYYY
+    const fullDateMatch = norm.match(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/)
+    if (fullDateMatch) {
+      const d = String(fullDateMatch[1]).padStart(2, '0')
+      const m = String(fullDateMatch[2]).padStart(2, '0')
+      const y = fullDateMatch[3].length === 2 ? `20${fullDateMatch[3]}` : fullDateMatch[3]
       date = `${y}-${m}-${d}`
+    } else {
+      // Explicit 2-part date: DD/MM (mask installment fractions like 4/4, 4/6 first so they aren't parsed as dates)
+      const sanitizedForDate = norm.replace(/\b(?:parcela\s+|atual\s+|parcela\s+atual\s+)?(\d{1,2})\s*(?:\/|\s+de\s+)(\d{1,2})\b/gi, ' ')
+      const shortDateMatch = sanitizedForDate.match(/\b(\d{1,2})[/-](\d{1,2})\b/)
+      if (shortDateMatch) {
+        const d = String(shortDateMatch[1]).padStart(2, '0')
+        const m = String(shortDateMatch[2]).padStart(2, '0')
+        const y = dateCtx.date.slice(0, 4)
+        date = `${y}-${m}-${d}`
+      }
     }
   }
 
@@ -467,7 +482,7 @@ export function parseSingleTransactionLocally(
   if (parsedInst) {
     installmentTotal = parsedInst.total
     installmentCurrent = parsedInst.current
-    installmentDateAnchor = parsedInst.anchor || (parsedInst.current === 1 ? 'purchase_date' : 'purchase_date')
+    installmentDateAnchor = parsedInst.anchor || 'purchase_date'
     installmentAmount = Math.round((total / parsedInst.total) * 100) / 100
     if (!paymentMethod) {
       paymentMethod = 'Cartão de Crédito'

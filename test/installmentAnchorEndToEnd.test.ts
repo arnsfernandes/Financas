@@ -105,8 +105,8 @@ describe('Installment Date Anchor End-to-End Integration', () => {
   })
 
   describe('1. Parsing & Detection across textual variations', () => {
-    it('Azul Case A: extracts purchase_date anchor when purchase/1st installment date is specified', () => {
-      const parsed = parseInstallmentFromText('Azul total 446,76 em 4x de 111,69 primeira parcela/compra: 21/06/2026 parcela atual 4/4')
+    it('Azul Real Reproducing Case: "4x, primeira parcela 21/06/2026, atual 4/4" parses as purchase_date anchor', () => {
+      const parsed = parseInstallmentFromText('Azul 446,76 em 4x de 111,69 primeira parcela 21/06/2026 atual 4/4')
       expect(parsed).toEqual({
         total: 4,
         current: 4,
@@ -114,17 +114,26 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       })
     })
 
-    it('Azul Case B: extracts current_installment anchor when current installment date is specified without purchase anchor', () => {
-      const parsed = parseInstallmentFromText('Azul 446,76 4x 111,69 parcela atual 4/4 em 21/09/2026')
+    it('Default without anchor keywords: "Azul 446,76 4x 4/4 data 21/06/2026" parses as purchase_date anchor', () => {
+      const parsed = parseInstallmentFromText('Azul 446,76 4x 4/4 data 21/06/2026')
       expect(parsed).toEqual({
         total: 4,
         current: 4,
-        anchor: 'current_installment',
+        anchor: 'purchase_date',
       })
     })
 
-    it('Shopee Case: "Shopee 64,51 parcela 4/6 data 26/09/2026" parses as current_installment', () => {
+    it('Shopee Case: "Shopee 64,51 parcela 4/6 data 26/09/2026" parses as purchase_date by default', () => {
       const parsed = parseInstallmentFromText('Shopee 64,51 parcela 4/6 data 26/09/2026')
+      expect(parsed).toEqual({
+        total: 6,
+        current: 4,
+        anchor: 'purchase_date',
+      })
+    })
+
+    it('Explicit current installment date anchor: "Shopee 64,51 parcela 4/6 data da parcela atual 26/09/2026" parses as current_installment', () => {
+      const parsed = parseInstallmentFromText('Shopee 64,51 parcela 4/6 data da parcela atual 26/09/2026')
       expect(parsed).toEqual({
         total: 6,
         current: 4,
@@ -184,8 +193,8 @@ describe('Installment Date Anchor End-to-End Integration', () => {
   })
 
   describe('3. Web Flow Integration (API Preview -> UI Draft -> Confirmation Save)', () => {
-    it('Azul Real Flow: saves purchase date 21/06/2026 with current=4/4 and produces June -> September 2026 in DB', async () => {
-      // Step 1: User enters text or fills web form
+    it('Azul Real Reproducing Case: purchase date 21/06/2026 with current=4/4 produces June -> September 2026 in DB', async () => {
+      // Step 1: User enters text or fills web form with 1st installment date 21/06/2026 and current=4/4
       const initialPayload = {
         sourceType: 'manual',
         allowDuplicate: true,
@@ -195,14 +204,14 @@ describe('Installment Date Anchor End-to-End Integration', () => {
           account_id: 'acc-inter-cc',
           category: 'Viagem',
           payment_method: 'Cartão de Crédito',
-          date: '2026-06-21', // Purchase date
+          date: '2026-06-21', // Purchase date (1st installment date)
           total: 111.69,
           subtotal: 446.76,
           installment_total: 4,
           installment_current: 4,
           installment_amount: 111.69,
           installment_date_anchor: 'purchase_date',
-          notes: 'primeira parcela/compra: 21/06/2026',
+          notes: '4x, primeira parcela 21/06/2026, atual 4/4',
         },
       }
 
@@ -220,7 +229,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       const data = await res.json()
       expect(data.ok).toBe(true)
 
-      // Verify all 4 transactions inserted into DB
+      // Verify all 4 transactions inserted into DB: June -> September (NOT March -> June)
       expect(insertedTransactions).toHaveLength(4)
       const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
 
@@ -228,7 +237,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
         vendor: 'Azul',
         installment_current: 1,
         installment_total: 4,
-        date: '2026-06-21',
+        date: '2026-06-21', // June
         total: 111.69,
         subtotal: 446.76,
       })
@@ -237,7 +246,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
         vendor: 'Azul',
         installment_current: 2,
         installment_total: 4,
-        date: '2026-07-21',
+        date: '2026-07-21', // July
         total: 111.69,
         subtotal: 446.76,
       })
@@ -246,7 +255,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
         vendor: 'Azul',
         installment_current: 3,
         installment_total: 4,
-        date: '2026-08-21',
+        date: '2026-08-21', // August
         total: 111.69,
         subtotal: 446.76,
       })
@@ -255,13 +264,13 @@ describe('Installment Date Anchor End-to-End Integration', () => {
         vendor: 'Azul',
         installment_current: 4,
         installment_total: 4,
-        date: '2026-09-21',
+        date: '2026-09-21', // September
         total: 111.69,
         subtotal: 446.76,
       })
     })
 
-    it('Azul Real Flow: saves current date 21/09/2026 with anchor current_installment and produces June -> September 2026 in DB', async () => {
+    it('Azul Real Flow: saves current date 21/09/2026 with explicit anchor current_installment and produces June -> September 2026 in DB', async () => {
       const initialPayload = {
         sourceType: 'manual',
         allowDuplicate: true,
@@ -278,7 +287,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
           installment_current: 4,
           installment_amount: 111.69,
           installment_date_anchor: 'current_installment',
-          notes: 'parcela atual 4/4',
+          notes: 'data da parcela atual: 21/09/2026 parcela atual 4/4',
         },
       }
 
@@ -307,7 +316,39 @@ describe('Installment Date Anchor End-to-End Integration', () => {
   })
 
   describe('4. Telegram & Local Parse Flow Integration', () => {
-    it('parses local transaction with purchase date anchor and saves correct sequence', async () => {
+    it('parses real reproducing case "Azul 446.76 em 4x primeira parcela 21/06/2026 atual 4/4" and saves June -> September 2026', async () => {
+      const localResult = parseSingleTransactionLocally(
+        'Azul 446.76 em 4x primeira parcela 21/06/2026 atual 4/4 no Cartão Inter',
+        mockAccounts,
+        mockCategories
+      )
+
+      expect(localResult.success).toBe(true)
+      expect(localResult.receipt).toBeDefined()
+      expect(localResult.receipt?.installment_total).toBe(4)
+      expect(localResult.receipt?.installment_current).toBe(4)
+      expect(localResult.receipt?.date).toBe('2026-06-21')
+      expect(localResult.receipt?.installment_date_anchor).toBe('purchase_date')
+
+      const saved = await save({
+        receipt: localResult.receipt!,
+        imageKey: null,
+        imageSha256: null,
+        allowDuplicate: true,
+      })
+
+      expect(saved.installment_total).toBe(4)
+      expect(insertedTransactions).toHaveLength(4)
+      const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
+      expect(sorted.map((r) => ({ current: r.installment_current, date: r.date }))).toEqual([
+        { current: 1, date: '2026-06-21' },
+        { current: 2, date: '2026-07-21' },
+        { current: 3, date: '2026-08-21' },
+        { current: 4, date: '2026-09-21' },
+      ])
+    })
+
+    it('parses local transaction without explicit anchor keywords and defaults to purchase_date', async () => {
       const localResult = parseSingleTransactionLocally(
         'Azul 446.76 em 4x no Cartão Inter',
         mockAccounts,

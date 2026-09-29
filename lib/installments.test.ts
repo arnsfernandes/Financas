@@ -778,12 +778,12 @@ describe('Real Installments in Database', () => {
     })
 
     describe('parseInstallmentFromText with fractions and anchor keywords', () => {
-      it('parses fraction "parcela 4/6" as current=4, total=6, anchor=current_installment', () => {
+      it('parses fraction "parcela 4/6" as current=4, total=6, anchor=purchase_date by default', () => {
         const res = parseInstallmentFromText('Shopee compra parcela 4/6 no cartão')
         expect(res).toEqual({
           total: 6,
           current: 4,
-          anchor: 'current_installment',
+          anchor: 'purchase_date',
         })
       })
 
@@ -793,6 +793,24 @@ describe('Real Installments in Database', () => {
           total: 6,
           current: 4,
           anchor: 'purchase_date',
+        })
+      })
+
+      it('parses "4x, primeira parcela 21/06/2026, atual 4/4" with anchor=purchase_date', () => {
+        const res = parseInstallmentFromText('4x, primeira parcela 21/06/2026, atual 4/4')
+        expect(res).toEqual({
+          total: 4,
+          current: 4,
+          anchor: 'purchase_date',
+        })
+      })
+
+      it('parses explicit "data da parcela atual: 26/09/2026 4/6" as anchor=current_installment', () => {
+        const res = parseInstallmentFromText('Shopee 64,51 parcela 4/6 data da parcela atual: 26/09/2026')
+        expect(res).toEqual({
+          total: 6,
+          current: 4,
+          anchor: 'current_installment',
         })
       })
 
