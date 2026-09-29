@@ -279,8 +279,54 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
       }
 
       // Build array of all transactions to insert in a single batch
-      const allTxRowsToInsert: any[] = [
-        {
+      const allTxRowsToInsert: any[] = []
+
+      if (isMultiInstallment && !existingGroupId && allInstallmentDates.length > 0) {
+        // Unified single canonical generation for all N installments
+        for (const inst of allInstallmentDates) {
+          const isPrimary = inst.installmentCurrent === (firstInstallmentCurrent || 1)
+          allTxRowsToInsert.push({
+            id: isPrimary ? id : generateUUID(),
+            account_id: input.receipt.account_id || null,
+            category_id: categoryId,
+            vendor_id: vendorId,
+            type: input.receipt.type || 'expense',
+            vendor: input.receipt.vendor,
+            vendor_address: input.receipt.vendor_address,
+            date: inst.date,
+            time: input.receipt.time || null,
+            currency: input.receipt.currency || 'BRL',
+            category: resolvedCategoryName,
+            subtotal: totalPurchaseAmount,
+            tax: isPrimary ? input.receipt.tax : null,
+            tip: isPrimary ? input.receipt.tip : null,
+            total: firstInstallmentTotal,
+            payment_method: input.receipt.payment_method,
+            notes: input.receipt.notes,
+            source_type: sourceType,
+            image_key: isPrimary ? input.imageKey : null,
+            image_sha256: isPrimary ? input.imageSha256 : null,
+            origin_type: originType,
+            raw_text: rawText,
+            original_filename: isPrimary ? originalFilename : null,
+            captured_at: capturedAt,
+            original_extracted_data: originalExtractedData,
+            is_recurring: isPrimary ? recPlan.is_recurring : false,
+            recurrence_frequency: isPrimary ? recPlan.recurrence_frequency : null,
+            recurrence_next_date: isPrimary ? recPlan.recurrence_next_date : null,
+            recurrence_status: isPrimary ? recPlan.recurrence_status : 'active',
+            installment_group_id: installmentGroupId,
+            installment_current: inst.installmentCurrent,
+            installment_total: totalInstallments,
+            installment_amount: installmentAmount,
+            review_status: effectiveReviewStatus,
+            review_reasons: effectiveReviewReasons,
+            created_at: scannedAt,
+          })
+        }
+      } else {
+        // Single transaction or appending to existing group
+        allTxRowsToInsert.push({
           id,
           account_id: input.receipt.account_id || null,
           category_id: categoryId,
@@ -317,37 +363,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
           review_status: effectiveReviewStatus,
           review_reasons: effectiveReviewReasons,
           created_at: scannedAt,
-        },
-      ]
-
-      // If new multi-installment group was initialized (without existing installment_group_id), prepare installments 2..N
-      if (isMultiInstallment && !existingGroupId) {
-        const futureRows = buildFutureInstallmentRows(
-          {
-            account_id: input.receipt.account_id || null,
-            category_id: categoryId,
-            vendor_id: vendorId,
-            type: input.receipt.type || 'expense',
-            vendor: input.receipt.vendor,
-            vendor_address: input.receipt.vendor_address,
-            time: input.receipt.time || null,
-            currency: input.receipt.currency || 'BRL',
-            category: resolvedCategoryName,
-            payment_method: input.receipt.payment_method,
-            notes: input.receipt.notes,
-            source_type: sourceType,
-            origin_type: originType,
-            original_filename: originalFilename,
-            captured_at: capturedAt,
-            original_extracted_data: originalExtractedData,
-            review_status: effectiveReviewStatus,
-            review_reasons: effectiveReviewReasons,
-            created_at: scannedAt,
-          },
-          plan,
-          baseDate
-        )
-        allTxRowsToInsert.push(...futureRows)
+        })
       }
 
       // 1. Perform single insert or batch insertion of all transaction rows

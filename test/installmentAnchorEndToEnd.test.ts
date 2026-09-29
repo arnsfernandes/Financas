@@ -498,5 +498,55 @@ describe('Installment Date Anchor End-to-End Integration', () => {
         { current: 4, date: '2026-09-21' },
       ])
     })
+
+    it('validates direct save() canonical rows generation: date=2026-06-21, current=4, total=4, anchor=purchase_date -> produces exactly June to September rows in allTxRowsToInsert', async () => {
+      const saved = await save({
+        receipt: {
+          vendor: 'Azul',
+          account_id: 'acc-inter-cc',
+          category: 'Viagem',
+          payment_method: 'Cartão de Crédito',
+          date: '2026-06-21',
+          total: 111.69,
+          subtotal: 446.76,
+          installment_total: 4,
+          installment_current: 4,
+          installment_amount: 111.69,
+          installment_date_anchor: 'purchase_date',
+        },
+        imageKey: null,
+        imageSha256: null,
+        allowDuplicate: true,
+      })
+
+      expect(saved.installment_total).toBe(4)
+      expect(saved.date).toBe('2026-09-21') // Saved primary row (current 4) has date 2026-09-21
+      expect(insertedTransactions).toHaveLength(4)
+
+      // Verify each row in inserted batch
+      const row1 = insertedTransactions.find((r) => r.installment_current === 1)
+      const row2 = insertedTransactions.find((r) => r.installment_current === 2)
+      const row3 = insertedTransactions.find((r) => r.installment_current === 3)
+      const row4 = insertedTransactions.find((r) => r.installment_current === 4)
+
+      expect(row1).toBeDefined()
+      expect(row2).toBeDefined()
+      expect(row3).toBeDefined()
+      expect(row4).toBeDefined()
+
+      expect(row1.date).toBe('2026-06-21')
+      expect(row2.date).toBe('2026-07-21')
+      expect(row3.date).toBe('2026-08-21')
+      expect(row4.date).toBe('2026-09-21')
+
+      // Check that all rows share the same group ID
+      expect(row1.installment_group_id).toBe(row4.installment_group_id)
+      expect(row2.installment_group_id).toBe(row4.installment_group_id)
+      expect(row3.installment_group_id).toBe(row4.installment_group_id)
+
+      // Check that row4 has the primary transaction id
+      expect(row4.id).toBe(saved.id)
+    })
   })
 })
+
