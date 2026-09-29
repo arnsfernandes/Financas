@@ -85,7 +85,7 @@ export const receiptSchema = z.object({
   installment_current: z.number().nullable().optional(),
   installment_total: z.number().nullable().optional(),
   installment_amount: z.number().nullable().optional(),
-  installment_date_anchor: z.enum(['purchase_date', 'current_installment']).nullable().optional(),
+  installment_date_anchor: z.enum(['purchase_date', 'current_installment']).default('purchase_date').optional().nullable(),
   // Review Status
   review_status: z.enum(['confirmed', 'needs_review']).default('confirmed').optional(),
   review_reasons: z.array(z.string()).default([]).optional(),

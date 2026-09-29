@@ -193,10 +193,12 @@ describe('Installment Date Anchor End-to-End Integration', () => {
   })
 
   describe('3. Web Flow Integration (API Preview -> UI Draft -> Confirmation Save)', () => {
-    it('Azul Real Reproducing Case: purchase date 21/06/2026 with current=4/4 produces June -> September 2026 in DB', async () => {
-      // Step 1: User enters text or fills web form with 1st installment date 21/06/2026 and current=4/4
-      const initialPayload = {
+    it('Direct Manual Form: user fills date 21/06/2026, 4x, parcela atual 4/4 with pure form fields, generates June -> September', async () => {
+      // Direct manual form fill in NewLaunchTab (no text/AI, no notes)
+      const manualPayload = {
         sourceType: 'manual',
+        rawText: null,
+        originalExtractedData: null,
         allowDuplicate: true,
         receipt: {
           type: 'expense',
@@ -204,14 +206,14 @@ describe('Installment Date Anchor End-to-End Integration', () => {
           account_id: 'acc-inter-cc',
           category: 'Viagem',
           payment_method: 'Cartão de Crédito',
-          date: '2026-06-21', // Purchase date (1st installment date)
+          date: '2026-06-21',
           total: 111.69,
+          installment_amount: 111.69,
           subtotal: 446.76,
           installment_total: 4,
           installment_current: 4,
-          installment_amount: 111.69,
           installment_date_anchor: 'purchase_date',
-          notes: '4x, primeira parcela 21/06/2026, atual 4/4',
+          notes: null,
         },
       }
 
@@ -221,7 +223,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
           host: 'localhost:3000',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(initialPayload),
+        body: JSON.stringify(manualPayload),
       })
 
       const res = await txPOST(req)
@@ -229,45 +231,59 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       const data = await res.json()
       expect(data.ok).toBe(true)
 
-      // Verify all 4 transactions inserted into DB: June -> September (NOT March -> June)
       expect(insertedTransactions).toHaveLength(4)
       const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
 
-      expect(sorted[0]).toMatchObject({
-        vendor: 'Azul',
-        installment_current: 1,
-        installment_total: 4,
-        date: '2026-06-21', // June
-        total: 111.69,
-        subtotal: 446.76,
+      expect(sorted[0]).toMatchObject({ installment_current: 1, date: '2026-06-21' })
+      expect(sorted[1]).toMatchObject({ installment_current: 2, date: '2026-07-21' })
+      expect(sorted[2]).toMatchObject({ installment_current: 3, date: '2026-08-21' })
+      expect(sorted[3]).toMatchObject({ installment_current: 4, date: '2026-09-21' })
+    })
+
+    it('Direct Manual Form without explicit installment_date_anchor defaults to purchase_date', async () => {
+      const manualPayload = {
+        sourceType: 'manual',
+        rawText: null,
+        originalExtractedData: null,
+        allowDuplicate: true,
+        receipt: {
+          type: 'expense',
+          vendor: 'Azul',
+          account_id: 'acc-inter-cc',
+          category: 'Viagem',
+          payment_method: 'Cartão de Crédito',
+          date: '2026-06-21',
+          total: 111.69,
+          installment_amount: 111.69,
+          subtotal: 446.76,
+          installment_total: 4,
+          installment_current: 4,
+          // installment_date_anchor omitted
+          notes: null,
+        },
+      }
+
+      const req = new NextRequest('http://localhost:3000/api/transactions', {
+        method: 'POST',
+        headers: {
+          host: 'localhost:3000',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(manualPayload),
       })
 
-      expect(sorted[1]).toMatchObject({
-        vendor: 'Azul',
-        installment_current: 2,
-        installment_total: 4,
-        date: '2026-07-21', // July
-        total: 111.69,
-        subtotal: 446.76,
-      })
+      const res = await txPOST(req)
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.ok).toBe(true)
 
-      expect(sorted[2]).toMatchObject({
-        vendor: 'Azul',
-        installment_current: 3,
-        installment_total: 4,
-        date: '2026-08-21', // August
-        total: 111.69,
-        subtotal: 446.76,
-      })
+      expect(insertedTransactions).toHaveLength(4)
+      const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
 
-      expect(sorted[3]).toMatchObject({
-        vendor: 'Azul',
-        installment_current: 4,
-        installment_total: 4,
-        date: '2026-09-21', // September
-        total: 111.69,
-        subtotal: 446.76,
-      })
+      expect(sorted[0]).toMatchObject({ installment_current: 1, date: '2026-06-21' })
+      expect(sorted[1]).toMatchObject({ installment_current: 2, date: '2026-07-21' })
+      expect(sorted[2]).toMatchObject({ installment_current: 3, date: '2026-08-21' })
+      expect(sorted[3]).toMatchObject({ installment_current: 4, date: '2026-09-21' })
     })
 
     it('Azul Real Flow: saves current date 21/09/2026 with explicit anchor current_installment and produces June -> September 2026 in DB', async () => {
