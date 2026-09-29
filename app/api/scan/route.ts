@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseReceiptImage, parseTextExpense } from '@/lib/pipeline'
-import { resolveInstallmentPlan } from '@/lib/installments'
+import { resolveInstallmentPlan, type InstallmentDateAnchor } from '@/lib/installments'
 import { validateReceipt } from '@/lib/validation'
 import type { Receipt } from '@/lib/schema'
 import { requireFinancialAuth } from '@/lib/authGuard'
@@ -61,6 +61,7 @@ export async function POST(req: NextRequest) {
       const installmentTotal = typeof body.installmentTotal === 'number' ? body.installmentTotal : (body.installmentTotal ? parseInt(body.installmentTotal, 10) : undefined)
       const installmentCurrent = typeof body.installmentCurrent === 'number' ? body.installmentCurrent : (body.installmentCurrent ? parseInt(body.installmentCurrent, 10) : undefined)
       const installmentAmount = typeof body.installmentAmount === 'number' ? body.installmentAmount : (body.installmentAmount ? parseFloat(body.installmentAmount) : undefined)
+      const installmentDateAnchor = body.installmentDateAnchor === 'purchase_date' || body.installmentDateAnchor === 'current_installment' ? body.installmentDateAnchor : undefined
 
       const processOpts = {
         overrideType,
@@ -71,6 +72,8 @@ export async function POST(req: NextRequest) {
         installmentTotal,
         installmentCurrent,
         installmentAmount,
+        installmentDateAnchor,
+        rawText: body.text,
       }
 
       // Try splitting the input into multiple transactions if applicable
@@ -144,6 +147,8 @@ export async function POST(req: NextRequest) {
     const installmentCurrent = rawInstCurrent ? parseInt(String(rawInstCurrent), 10) : undefined
     const rawInstAmount = form.get('installmentAmount')
     const installmentAmount = rawInstAmount ? parseFloat(String(rawInstAmount)) : undefined
+    const rawAnchor = form.get('installmentDateAnchor')
+    const installmentDateAnchor: InstallmentDateAnchor | undefined = rawAnchor === 'purchase_date' || rawAnchor === 'current_installment' ? (rawAnchor as InstallmentDateAnchor) : undefined
 
     const processOpts = {
       overrideType,
@@ -154,6 +159,7 @@ export async function POST(req: NextRequest) {
       installmentTotal,
       installmentCurrent,
       installmentAmount,
+      installmentDateAnchor,
       filename: file instanceof File ? file.name : undefined,
       rawText: typeof text === 'string' && text.trim() ? text.trim() : undefined,
     }

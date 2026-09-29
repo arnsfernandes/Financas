@@ -467,7 +467,7 @@ export function parseSingleTransactionLocally(
   if (parsedInst) {
     installmentTotal = parsedInst.total
     installmentCurrent = parsedInst.current
-    installmentDateAnchor = parsedInst.anchor || (parsedInst.current === 1 ? 'purchase_date' : 'current_installment')
+    installmentDateAnchor = parsedInst.anchor || (parsedInst.current === 1 ? 'purchase_date' : 'purchase_date')
     installmentAmount = Math.round((total / parsedInst.total) * 100) / 100
     if (!paymentMethod) {
       paymentMethod = 'Cartão de Crédito'

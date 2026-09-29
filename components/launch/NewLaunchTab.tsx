@@ -30,7 +30,7 @@ import type { Receipt } from '@/lib/schema'
 import { formatBRL } from '@/lib/formatters'
 import { CategorySelect } from '@/components/categories/CategorySelect'
 import { AccountSelect } from '@/components/accounts/AccountSelect'
-import { resolveInstallmentPlan } from '@/lib/installments'
+import { resolveInstallmentPlan, generateInstallmentDates, type InstallmentDateAnchor } from '@/lib/installments'
 import { resolveRecurrenceUpdate } from '@/lib/recurrence'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
 
@@ -118,6 +118,7 @@ export function NewLaunchTab({
   const [reviewIsInstallment, setReviewIsInstallment] = useState<boolean>(false)
   const [reviewInstallmentCurrent, setReviewInstallmentCurrent] = useState<string>('1')
   const [reviewInstallmentTotal, setReviewInstallmentTotal] = useState<string>('2')
+  const [reviewInstallmentDateAnchor, setReviewInstallmentDateAnchor] = useState<InstallmentDateAnchor>('purchase_date')
   const [reviewNeedsReview, setReviewNeedsReview] = useState<boolean>(false)
   const [reviewValidationReasons, setReviewValidationReasons] = useState<string[]>([])
   const [savingLaunch, setSavingLaunch] = useState<boolean>(false)
@@ -219,6 +220,7 @@ export function NewLaunchTab({
       setReviewIsInstallment(Boolean(data.receipt.installment_total && data.receipt.installment_total > 1))
       setReviewInstallmentCurrent(String(data.receipt.installment_current || 1))
       setReviewInstallmentTotal(String(data.receipt.installment_total || 2))
+      setReviewInstallmentDateAnchor(data.receipt.installment_date_anchor || 'purchase_date')
       setReviewNeedsReview(data.receipt.review_status === 'needs_review')
       setReviewValidationReasons(data.receipt.review_reasons || [])
       setLaunchStep('review')
@@ -255,6 +257,7 @@ export function NewLaunchTab({
     setReviewIsInstallment(false)
     setReviewInstallmentCurrent('1')
     setReviewInstallmentTotal('2')
+    setReviewInstallmentDateAnchor('purchase_date')
     setReviewNeedsReview(false)
     setReviewValidationReasons([])
     setFilePreviewUrl(null)
@@ -349,8 +352,10 @@ export function NewLaunchTab({
       installmentTotal: reviewIsInstallment ? parseInt(reviewInstallmentTotal, 10) || 2 : null,
       installmentCurrent: reviewIsInstallment ? parseInt(reviewInstallmentCurrent, 10) || 1 : null,
       installmentAmount: reviewIsInstallment ? parsedTotal : null,
+      installmentDateAnchor: reviewIsInstallment ? reviewInstallmentDateAnchor : undefined,
       notes: reviewNotes,
       vendor: reviewVendor,
+      rawText: draft?.rawText || null,
     })
     const instTotal = plan.installmentTotal
     const instCurrent = plan.installmentCurrent
@@ -1451,6 +1456,57 @@ export function NewLaunchTab({
                         />
                       </div>
                     </div>
+                    {/* Âncora da Data */}
+                    {parseInt(reviewInstallmentCurrent, 10) > 1 && (
+                      <div>
+                        <label className="text-[11px] text-[#6B7280] block mb-1">A data informada acima refere-se a:</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setReviewInstallmentDateAnchor('purchase_date')}
+                            className={`px-2.5 py-1.5 rounded-lg border text-left text-[11px] transition-all ${
+                              reviewInstallmentDateAnchor === 'purchase_date'
+                                ? 'bg-blue-50 border-[#2F68FE] text-[#2F68FE] font-medium'
+                                : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
+                            }`}
+                          >
+                            🛒 Data da compra (1ª parcela)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setReviewInstallmentDateAnchor('current_installment')}
+                            className={`px-2.5 py-1.5 rounded-lg border text-left text-[11px] transition-all ${
+                              reviewInstallmentDateAnchor === 'current_installment'
+                                ? 'bg-blue-50 border-[#2F68FE] text-[#2F68FE] font-medium'
+                                : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
+                            }`}
+                          >
+                            📅 Data da parcela atual ({reviewInstallmentCurrent}/{reviewInstallmentTotal})
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {/* Linha do Tempo Prevista */}
+                    {reviewDate && parseInt(reviewInstallmentTotal, 10) > 1 && (() => {
+                      const tot = parseInt(reviewInstallmentTotal, 10) || 2
+                      const curr = parseInt(reviewInstallmentCurrent, 10) || 1
+                      const previewDates = generateInstallmentDates(reviewDate, tot, curr, reviewInstallmentDateAnchor)
+                      const firstDate = previewDates[0]?.date
+                      const lastDate = previewDates[previewDates.length - 1]?.date
+                      const formatPreviewDate = (d?: string) => {
+                        if (!d) return ''
+                        const [y, m, day] = d.split('-')
+                        return `${day}/${m}/${y}`
+                      }
+                      return (
+                        <div className="pt-1 text-[11px] text-[#6B7280] flex items-center justify-between border-t border-[#E5E7EB]">
+                          <span>Cronograma ({tot}x):</span>
+                          <span className="font-medium text-[#111827]">
+                            1/{tot}: {formatPreviewDate(firstDate)} → {tot}/{tot}: {formatPreviewDate(lastDate)}
+                          </span>
+                        </div>
+                      )
+                    })()}
                   </div>
                 )}
               </div>

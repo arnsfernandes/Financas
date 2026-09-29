@@ -127,6 +127,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
     installmentGroupId: input.receipt.installment_group_id,
     notes: input.receipt.notes,
     vendor: input.receipt.vendor,
+    rawText,
   })
 
   const isMultiInstallment = plan.isMultiInstallment

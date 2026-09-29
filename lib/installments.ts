@@ -71,17 +71,29 @@ export function parseInstallmentFromText(
   // Mask full dates (e.g. 26/06/2026 or 26/06/26) so they are not misparsed as fractions
   const sanitized = text.replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, ' ')
 
+  // Check purchase vs current installment anchor indicators
+  const isPurchaseAnchor = /\b(primeira\s+parcela|1[aªº]\s+parcela|parcela\s+1\b|compra(?:\s+(?:feita|realizada))?\s*(?:em\b|no\s+dia\b|:|\/|\d{1,2}[/-]\d{1,2})|comprad[oa]\s+em|data\s+da\s+compra|in[ií]cio\s+em|iniciando\s+em|come[cç]ou\s+em|a\s+partir\s+de|primeira\s+parcela\/compra|compra\/primeira\s+parcela)\b/i.test(text) ||
+    /\b1\s*(?:\/|\s+de\s+)\d{1,2}\s*(?:em|no\s+dia|:)\b/i.test(text)
+  const isCurrentAnchor = /\b(parcela\s+atual|atual(?:\s+em|\s*:)?|vencimento\s+atual|fatura\s+atual|parcela\s+(?:deste|do)\s+m[eê]s)\b/i.test(text)
+
   // e.g. "parcela 4/6", "4/6", "parcela 4 de 6", "4 de 6"
   const mFraction = sanitized.match(/\b(?:parcela\s+)?(\d{1,2})\s*(?:\/|\s+de\s+)(\d{1,2})\b/i)
   if (mFraction) {
     const curr = parseInt(mFraction[1], 10)
     const tot = parseInt(mFraction[2], 10)
     if (tot > 1 && curr >= 1 && curr <= tot) {
-      const isPurchaseAnchor = /\b(primeira\s+parcela|1[aª]\s+parcela|compra\s+(?:feita\s+)?em|comprad[oa]\s+em|in[ií]cio\s+em|come[cç]ou\s+em)\b/i.test(text)
+      let anchor: InstallmentDateAnchor = 'current_installment'
+      if (isPurchaseAnchor) {
+        anchor = 'purchase_date'
+      } else if (curr === 1) {
+        anchor = 'purchase_date'
+      } else if (isCurrentAnchor) {
+        anchor = 'current_installment'
+      }
       return {
         total: tot,
         current: curr,
-        anchor: isPurchaseAnchor ? 'purchase_date' : 'current_installment',
+        anchor,
       }
     }
   }
@@ -134,14 +146,21 @@ export function resolveInstallmentPlan(input: InstallmentPlanInput): Installment
     }
   }
 
-  if (!detectedAnchor && /\b(primeira\s+parcela|1[aª]\s+parcela|compra\s+(?:feita\s+)?em|comprad[oa]\s+em|in[ií]cio\s+em|come[cç]ou\s+em)\b/i.test(textToCheck)) {
-    detectedAnchor = 'purchase_date'
+  if (!detectedAnchor) {
+    if (/\b(primeira\s+parcela|1[aªº]\s+parcela|parcela\s+1\b|compra(?:\s+(?:feita|realizada))?\s*(?:em\b|no\s+dia\b|:|\/|\d{1,2}[/-]\d{1,2})|comprad[oa]\s+em|data\s+da\s+compra|in[ií]cio\s+em|iniciando\s+em|come[cç]ou\s+em|a\s+partir\s+de|primeira\s+parcela\/compra|compra\/primeira\s+parcela)\b/i.test(textToCheck) ||
+        /\b1\s*(?:\/|\s+de\s+)\d{1,2}\s*(?:em|no\s+dia|:)\b/i.test(textToCheck)) {
+      detectedAnchor = 'purchase_date'
+    } else if (/\b(parcela\s+atual|atual(?:\s+em|\s*:)?|vencimento\s+atual|fatura\s+atual|parcela\s+(?:deste|do)\s+m[eê]s)\b/i.test(textToCheck)) {
+      detectedAnchor = 'current_installment'
+    }
   }
 
   const isMultiInstallment = typeof totalInstallments === 'number' && totalInstallments > 1
 
   const safeCurrent = currentInstallment ?? 1
-  const effectiveAnchor: InstallmentDateAnchor = detectedAnchor || (safeCurrent === 1 ? 'purchase_date' : 'current_installment')
+  const effectiveAnchor: InstallmentDateAnchor = input.installmentDateAnchor
+    || detectedAnchor
+    || (input.existingTx?.installment_group_id ? 'current_installment' : 'purchase_date')
 
   if (!isMultiInstallment) {
     const existingGroupId = input.installmentGroupId || input.existingTx?.installment_group_id || null
@@ -226,7 +245,7 @@ export function generateInstallmentDates(
   baseDate: string,
   totalInstallments: number,
   currentInstallment: number = 1,
-  anchor: InstallmentDateAnchor = 'current_installment'
+  anchor: InstallmentDateAnchor = 'purchase_date'
 ): { installmentCurrent: number; date: string }[] {
   const result: { installmentCurrent: number; date: string }[] = []
 
