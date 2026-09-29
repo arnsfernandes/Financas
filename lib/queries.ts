@@ -1003,6 +1003,32 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   return true
 }
 
+/**
+ * Delete all transactions belonging to an installment group by installment_group_id from Supabase
+ * Cascades automatically to transaction_items.
+ */
+export async function deleteInstallmentGroup(groupId: string): Promise<boolean> {
+  if (!groupId) {
+    throw new Error('installment_group_id is required')
+  }
+
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    return true
+  }
+
+  const { error } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('installment_group_id', groupId)
+
+  if (error) {
+    throw new Error(`Failed to delete installment group: ${error.message}`)
+  }
+
+  return true
+}
+
 export interface UpdateTransactionInput {
   type?: 'expense' | 'income'
   account_id?: string | null

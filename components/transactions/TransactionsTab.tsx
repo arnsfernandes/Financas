@@ -150,6 +150,7 @@ export interface TransactionsTabProps {
     search?: string
   }) => Promise<void>
   onDeleteTransaction: (id: string, vendor?: string | null) => Promise<void>
+  onDeleteInstallmentGroup?: (groupId: string) => Promise<void>
   onTransactionUpdated: (updatedTx: TransactionRecord) => void
   className?: string
 }
@@ -182,6 +183,7 @@ export function TransactionsTab({
   setFilterCategory,
   fetchTransactions,
   onDeleteTransaction,
+  onDeleteInstallmentGroup,
   onTransactionUpdated,
   className,
 }: TransactionsTabProps) {
@@ -235,6 +237,8 @@ export function TransactionsTab({
 
   // Estado de exclusão
   const [deletingTxId, setDeletingTxId] = useState<string | null>(null)
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null)
+  const [groupDeleteError, setGroupDeleteError] = useState<string | null>(null)
 
   // 1. Agrupamento visual das compras parceladas por installment_group_id
   const displayItems = useMemo(() => {
@@ -421,6 +425,8 @@ export function TransactionsTab({
 
   async function handleDelete(e: React.MouseEvent, id: string, vendor?: string | null) {
     e.stopPropagation()
+    if (deletingTxId || deletingGroupId) return
+
     const confirmMsg = vendor
       ? `Tem certeza que deseja excluir o lançamento de "${vendor}"?`
       : 'Tem certeza que deseja excluir este lançamento?'
@@ -436,6 +442,38 @@ export function TransactionsTab({
       setSelectedGroupDetails((prev) => prev.filter((p) => p.id !== id))
     } finally {
       setDeletingTxId(null)
+    }
+  }
+
+  async function handleDeleteGroup(groupId: string) {
+    if (!groupId || deletingGroupId || deletingTxId) return
+
+    const count = selectedInstallmentGroup?.installmentCount || selectedGroupDetails.length
+    const confirmMsg = `Excluir compra parcelada? As ${count} parcelas deste lançamento serão excluídas.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setDeletingGroupId(groupId)
+    setGroupDeleteError(null)
+    try {
+      if (onDeleteInstallmentGroup) {
+        await onDeleteInstallmentGroup(groupId)
+      } else {
+        const res = await fetchWithAuth(`/api/transactions/installments/${groupId}`, { method: 'DELETE' })
+        const data = await res.json()
+        if (!data.ok) {
+          throw new Error(data.error || 'Erro ao excluir compra parcelada')
+        }
+        await fetchTransactions()
+      }
+      setSelectedInstallmentGroup(null)
+      setSelectedGroupDetails([])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao excluir compra parcelada'
+      setGroupDeleteError(msg)
+      alert(msg)
+    } finally {
+      setDeletingGroupId(null)
     }
   }
 
@@ -917,6 +955,12 @@ export function TransactionsTab({
 
             {/* Conteúdo com a Lista de Parcelas */}
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              {groupDeleteError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                  {groupDeleteError}
+                </div>
+              )}
+
               {/* Card Resumo do Parcelamento */}
               <div className="p-4 bg-[#F9FAFB] border border-[#EBEEF2] rounded-2xl text-center">
                 <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
@@ -989,8 +1033,9 @@ export function TransactionsTab({
                           <div className="pt-2 border-t border-[#F4F5F7] flex items-center justify-end gap-2">
                             <button
                               type="button"
+                              disabled={Boolean(deletingGroupId) || deletingTxId === inst.id}
                               onClick={(e) => handleStartEditing(e, inst)}
-                              className="px-2.5 py-1 text-xs font-medium text-[#2F68FE] bg-[#EBF2FE] hover:bg-[#DDE9FD] rounded-lg transition-colors flex items-center gap-1.5"
+                              className="px-2.5 py-1 text-xs font-medium text-[#2F68FE] bg-[#EBF2FE] hover:bg-[#DDE9FD] rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
                               title="Editar esta parcela"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
@@ -999,7 +1044,7 @@ export function TransactionsTab({
 
                             <button
                               type="button"
-                              disabled={deletingTxId === inst.id}
+                              disabled={Boolean(deletingGroupId) || deletingTxId === inst.id}
                               onClick={(e) => handleDelete(e, inst.id, `Parcela ${cur} de ${selectedInstallmentGroup.vendor}`)}
                               className="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
                               title="Excluir esta parcela"
@@ -1019,8 +1064,24 @@ export function TransactionsTab({
             {/* Rodapé do Drawer */}
             <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between gap-3">
               <button
-                onClick={() => setSelectedInstallmentGroup(null)}
-                className="py-2 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors"
+                type="button"
+                disabled={Boolean(deletingGroupId) || Boolean(deletingTxId)}
+                onClick={() => handleDeleteGroup(selectedInstallmentGroup.groupId)}
+                className="py-2 px-3.5 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                title="Excluir todas as parcelas desta compra"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deletingGroupId === selectedInstallmentGroup.groupId ? 'Excluindo compra…' : 'Excluir compra'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setGroupDeleteError(null)
+                  setSelectedInstallmentGroup(null)
+                }}
+                disabled={Boolean(deletingGroupId)}
+                className="py-2 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Fechar
               </button>

@@ -79,6 +79,51 @@ describe('Queries & Reports with filters', () => {
     })
   })
 
+  describe('deleteInstallmentGroup', () => {
+    it('throws error if groupId is empty or invalid', async () => {
+      const { deleteInstallmentGroup } = await import('./queries')
+      await expect(deleteInstallmentGroup('')).rejects.toThrow('installment_group_id is required')
+    })
+
+    it('handles null client gracefully', async () => {
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue(null)
+      const { deleteInstallmentGroup } = await import('./queries')
+      const res = await deleteInstallmentGroup('grp-123')
+      expect(res).toBe(true)
+    })
+
+    it('calls supabase delete with correct installment_group_id exclusively', async () => {
+      const eqMock = vi.fn().mockResolvedValue({ error: null })
+      const deleteMock = vi.fn().mockReturnValue({ eq: eqMock })
+      const fromMock = vi.fn().mockReturnValue({ delete: deleteMock })
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: fromMock,
+      } as any)
+
+      const { deleteInstallmentGroup } = await import('./queries')
+      const res = await deleteInstallmentGroup('grp-abc-789')
+
+      expect(res).toBe(true)
+      expect(fromMock).toHaveBeenCalledWith('transactions')
+      expect(deleteMock).toHaveBeenCalledOnce()
+      expect(eqMock).toHaveBeenCalledWith('installment_group_id', 'grp-abc-789')
+    })
+
+    it('throws error if supabase group deletion fails', async () => {
+      const eqMock = vi.fn().mockResolvedValue({ error: { message: 'Database group delete failed' } })
+      const deleteMock = vi.fn().mockReturnValue({ eq: eqMock })
+      const fromMock = vi.fn().mockReturnValue({ delete: deleteMock })
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: fromMock,
+      } as any)
+
+      const { deleteInstallmentGroup } = await import('./queries')
+      await expect(deleteInstallmentGroup('grp-abc-789')).rejects.toThrow('Database group delete failed')
+    })
+  })
+
   describe('updateTransaction', () => {
     it('handles null client gracefully', async () => {
       vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue(null)

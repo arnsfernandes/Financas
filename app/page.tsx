@@ -308,6 +308,33 @@ export default function Home() {
     }
   }
 
+  // Excluir compra parcelada completa (todas as parcelas do grupo)
+  async function handleDeleteInstallmentGroup(groupId: string) {
+    setTxError('')
+    try {
+      const res = await fetchWithAuth(`/api/transactions/installments/${groupId}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (data.ok) {
+        setTransactions((prev) => prev.filter((t) => t.installment_group_id !== groupId))
+        if (selectedDrawerTx?.installment_group_id === groupId) {
+          setSelectedDrawerTx(null)
+        }
+        await Promise.all([
+          fetchDashboard(periodType, monthOffset),
+          fetchAccounts(),
+        ])
+      } else {
+        const msg = data.error || 'Erro ao excluir compra parcelada'
+        setTxError(msg)
+        throw new Error(msg)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro de conexão ao excluir compra parcelada'
+      setTxError(msg)
+      throw new Error(msg)
+    }
+  }
+
   async function handleSaveSuccess() {
     await Promise.all([
       fetchDashboard(periodType, monthOffset),
@@ -471,6 +498,9 @@ export default function Home() {
             fetchTransactions={fetchTransactions}
             onDeleteTransaction={async (id) => {
               await handleDeleteTransaction(id)
+            }}
+            onDeleteInstallmentGroup={async (groupId) => {
+              await handleDeleteInstallmentGroup(groupId)
             }}
             onTransactionUpdated={(updatedTx) => {
               setTransactions((prev) =>
