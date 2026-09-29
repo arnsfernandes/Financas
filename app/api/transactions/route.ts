@@ -3,10 +3,15 @@ import { listTransactions, type TransactionFilter } from '@/lib/queries'
 import { processPendingRecurrences } from '@/lib/recurrence'
 import { requireFinancialAuth } from '@/lib/authGuard'
 
+import { unstable_noStore as noStore } from 'next/cache'
+
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
+export const fetchCache = 'force-no-store'
 
 export async function GET(req: NextRequest) {
+  noStore()
   const auth = requireFinancialAuth(req)
   if (!auth.authorized && auth.response) {
     return auth.response
