@@ -157,11 +157,15 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
   let primaryRowDate = input.receipt.date || null
 
   if (isMultiInstallment && totalInstallments && installmentGroupId) {
+    // Canonical Rule: date entered is ALWAYS the purchase date / installment 1 date.
+    // Installment 1 = date, Installment 2 = date + 1m, ..., Installment N = date + (N-1)m.
+    // installment_current does NOT alter the calendar sequence; it only marks the current installment.
+    const isManual = originType === 'manual' || (input.sourceType as any) === 'manual' || (input.receipt as any).origin_type === 'manual'
     allInstallmentDates = generateInstallmentDates(
       baseDate,
       totalInstallments,
       firstInstallmentCurrent || 1,
-      plan.installmentDateAnchor
+      isManual ? 'purchase_date' : plan.installmentDateAnchor
     )
     const matched = allInstallmentDates.find((d) => d.installmentCurrent === (firstInstallmentCurrent || 1))
     if (matched) {

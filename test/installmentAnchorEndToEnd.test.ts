@@ -547,6 +547,38 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       // Check that row4 has the primary transaction id
       expect(row4.id).toBe(saved.id)
     })
+
+    it('Mandatory 5-installment example: date=2026-06-21, current=4, total=5 -> produces 1/5 21/06, 2/5 21/07, 3/5 21/08, 4/5 21/09, 5/5 21/10', async () => {
+      const saved = await save({
+        sourceType: 'manual',
+        receipt: {
+          vendor: 'Loja Exemplo',
+          account_id: 'acc-inter-cc',
+          category: 'Compras',
+          payment_method: 'Cartão de Crédito',
+          date: '2026-06-21',
+          total: 100,
+          installment_total: 5,
+          installment_current: 4,
+          installment_amount: 100,
+        },
+        imageKey: null,
+        imageSha256: null,
+        allowDuplicate: true,
+      })
+
+      expect(saved.installment_total).toBe(5)
+      expect(insertedTransactions).toHaveLength(5)
+      const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
+
+      expect(sorted.map(r => ({ current: r.installment_current, date: r.date }))).toEqual([
+        { current: 1, date: '2026-06-21' },
+        { current: 2, date: '2026-07-21' },
+        { current: 3, date: '2026-08-21' },
+        { current: 4, date: '2026-09-21' },
+        { current: 5, date: '2026-10-21' },
+      ])
+    })
   })
 })
 
