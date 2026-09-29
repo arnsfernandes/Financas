@@ -717,6 +717,25 @@ describe('Real Installments in Database', () => {
           { installmentCurrent: 3, date: '2026-11-23' },
         ])
       })
+
+      it('correctly calculates 12 installments from purchase date 28/11/2025 with 11/12 in 2026-09-28 and 12/12 in 2026-10-28', () => {
+        const dates = generateInstallmentDates('2025-11-28', 12, 1)
+        expect(dates).toHaveLength(12)
+        expect(dates).toEqual([
+          { installmentCurrent: 1, date: '2025-11-28' },
+          { installmentCurrent: 2, date: '2025-12-28' },
+          { installmentCurrent: 3, date: '2026-01-28' },
+          { installmentCurrent: 4, date: '2026-02-28' },
+          { installmentCurrent: 5, date: '2026-03-28' },
+          { installmentCurrent: 6, date: '2026-04-28' },
+          { installmentCurrent: 7, date: '2026-05-28' },
+          { installmentCurrent: 8, date: '2026-06-28' },
+          { installmentCurrent: 9, date: '2026-07-28' },
+          { installmentCurrent: 10, date: '2026-08-28' },
+          { installmentCurrent: 11, date: '2026-09-28' },
+          { installmentCurrent: 12, date: '2026-10-28' },
+        ])
+      })
     })
 
     describe('buildFutureInstallmentRows', () => {
@@ -748,6 +767,31 @@ describe('Real Installments in Database', () => {
         expect(rows[1].total).toBe(100)
         expect(rows[1].subtotal).toBe(300)
         expect(rows[1].installment_group_id).toBe(plan.installmentGroupId)
+      })
+
+      it('builds 11 future rows for 2025-11-28 12x purchase, ending in 2026-10-28', () => {
+        const plan = resolveInstallmentPlan({
+          total: 1200,
+          installmentTotal: 12,
+        })
+        const rows = buildFutureInstallmentRows(
+          {
+            account_id: 'acc-1',
+            category: 'Compras',
+            vendor: 'Loja Exemplo',
+            type: 'expense',
+          },
+          plan,
+          '2025-11-28'
+        )
+
+        expect(rows).toHaveLength(11)
+        expect(rows[0].installment_current).toBe(2)
+        expect(rows[0].date).toBe('2025-12-28')
+        expect(rows[9].installment_current).toBe(11)
+        expect(rows[9].date).toBe('2026-09-28')
+        expect(rows[10].installment_current).toBe(12)
+        expect(rows[10].date).toBe('2026-10-28')
       })
     })
   })

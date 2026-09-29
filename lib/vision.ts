@@ -58,6 +58,8 @@ Rules for relative dates:
 - "anteontem" / "day before yesterday" -> compute 2 days before reference date (${contextDate.date})
 - "amanhã" / "tomorrow" -> compute 1 day after reference date (${contextDate.date})
 - "quarta passada", "última segunda", etc. -> compute the most recent matching weekday prior to reference date.
+- Explicit dates (e.g. "28/11/2025", "28 de novembro de 2025") must ALWAYS be output exactly as stated in ISO 8601 (YYYY-MM-DD), even if they are in the past or previous years.
+- For installment purchases (e.g. "comprado em 28/11/2025 em 12x"), the date field MUST be the exact date of purchase (the first installment date), NEVER adjusted to the current month or current year.
 - Dates must ALWAYS be output in ISO 8601 (YYYY-MM-DD). If year is omitted, use the context year.
 
 Transaction Type & Category Rules:
@@ -105,6 +107,8 @@ Rules for relative dates:
 - "anteontem" / "day before yesterday" -> compute 2 days before reference date (${contextDate.date})
 - "amanhã" / "tomorrow" -> compute 1 day after reference date (${contextDate.date})
 - "quarta passada", "última segunda", etc. -> compute the most recent matching weekday prior to reference date.
+- Explicit dates (e.g. "28/11/2025", "28 de novembro de 2025") must ALWAYS be output exactly as stated in ISO 8601 (YYYY-MM-DD), even if they are in the past or previous years.
+- For installment purchases (e.g. "comprado em 28/11/2025 em 12x"), the date field MUST be the exact date of purchase (the first installment date), NEVER adjusted to the current month or current year.
 - Dates must ALWAYS be output in ISO 8601 (YYYY-MM-DD). If year is omitted, use the context year.
 
 Transaction Type & Category Rules:
