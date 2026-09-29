@@ -321,5 +321,111 @@ describe('web interpretation → review → explicit confirmation', () => {
     expect(rows.every((r: any) => r.payment_method === 'Cartão de Crédito' && r.account_id === 'card')).toBe(true)
     setOpenAIClientForTesting(null)
   })
+
+  it('preserves shared date across batch transactions when not locally overridden, and respects local date if specified', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key')
+    const { setOpenAIClientForTesting } = await import('../lib/intent')
+    const rawInput = 'Google One Plano R$ 23,99; Combustível R$ 150,00; IOF R$ 3,50 dia 20/09/2026. Tudo no Cartão Inter, dia 23/09/2026.'
+
+    // Mock splitTransactionText OpenAI call
+    const create = vi.fn(async () => ({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            descriptions: ['Google One Plano R$ 23,99', 'Combustível R$ 150,00', 'IOF R$ 3,50 dia 20/09/2026'],
+            shared_context: 'Tudo no Cartão Inter, dia 23/09/2026',
+          }),
+        },
+      }],
+    }))
+    setOpenAIClientForTesting({ chat: { completions: { create } } } as any)
+
+    // Mock scanReceipt for the 3 separated descriptions
+    // Item 1 and 2 get global date 2026-09-23 from "dia 23/09/2026" in rawText
+    // Item 3 has local date "dia 20/09/2026"
+    vi.mocked(scanReceipt)
+      .mockResolvedValueOnce({
+        receipt: {
+          type: 'expense',
+          vendor: 'Google One',
+          vendor_address: null,
+          date: '2026-09-23',
+          time: null,
+          currency: 'BRL',
+          category: 'Assinaturas',
+          subtotal: 23.99,
+          tax: null,
+          tip: null,
+          total: 23.99,
+          payment_method: 'Cartão de Crédito',
+          account_id: 'card',
+          notes: null,
+          items: [],
+        },
+        model: 'test',
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+      })
+      .mockResolvedValueOnce({
+        receipt: {
+          type: 'expense',
+          vendor: 'Combustível',
+          vendor_address: null,
+          date: '2026-09-23',
+          time: null,
+          currency: 'BRL',
+          category: 'Transporte',
+          subtotal: 150,
+          tax: null,
+          tip: null,
+          total: 150,
+          payment_method: 'Cartão de Crédito',
+          account_id: 'card',
+          notes: null,
+          items: [],
+        },
+        model: 'test',
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+      })
+      .mockResolvedValueOnce({
+        receipt: {
+          type: 'expense',
+          vendor: 'IOF',
+          vendor_address: null,
+          date: '2026-09-20',
+          time: null,
+          currency: 'BRL',
+          category: 'Impostos & Tarifas',
+          subtotal: 3.50,
+          tax: null,
+          tip: null,
+          total: 3.50,
+          payment_method: 'Cartão de Crédito',
+          account_id: 'card',
+          notes: null,
+          items: [],
+        },
+        model: 'test',
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+      })
+
+    const scanResponse = await interpret(jsonRequest('/api/scan', { text: rawInput }))
+    expect(scanResponse.status).toBe(200)
+    const scanData = await scanResponse.json()
+    expect(scanData.isBatch).toBe(true)
+    expect(scanData.items).toHaveLength(3)
+    expect(scanData.items[0].receipt.date).toBe('2026-09-23')
+    expect(scanData.items[1].receipt.date).toBe('2026-09-23')
+    expect(scanData.items[2].receipt.date).toBe('2026-09-20')
+
+    const confirmResponse = await confirm(jsonRequest('/api/transactions', {
+      items: scanData.items,
+    }))
+    expect(confirmResponse.status).toBe(200)
+
+    expect(insertTx).toHaveBeenCalledOnce()
+    const rows = Array.isArray(insertTx.mock.calls[0][0]) ? insertTx.mock.calls[0][0] : [insertTx.mock.calls[0][0]]
+    expect(rows.map((r: any) => r.date)).toEqual(['2026-09-23', '2026-09-23', '2026-09-20'])
+    setOpenAIClientForTesting(null)
+  })
 })
 

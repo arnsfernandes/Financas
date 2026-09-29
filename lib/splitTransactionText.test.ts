@@ -31,6 +31,19 @@ it('interprets trailing shared context (e.g. no cartão Inter) across descriptio
   expect(create).toHaveBeenCalledOnce()
 })
 
+it('interprets trailing shared context with date (e.g. Tudo no Cartão Inter, dia 23/09/2026) across descriptions', async () => {
+  const text = 'Google One Plano R$ 23,99; Combustível R$ 150,00; IOF R$ 3,50. Tudo no Cartão Inter, dia 23/09/2026.'
+  const descriptions = ['Google One Plano R$ 23,99', 'Combustível R$ 150,00', 'IOF R$ 3,50']
+  const shared_context = 'Tudo no Cartão Inter, dia 23/09/2026'
+  const create = vi.fn(async () => ({ choices: [{ message: { content: JSON.stringify({ descriptions, shared_context }) } }] }))
+  expect(await splitTransactionText(text, { chat: { completions: { create } } } as any)).toEqual([
+    'Google One Plano R$ 23,99 Tudo no Cartão Inter, dia 23/09/2026',
+    'Combustível R$ 150,00 Tudo no Cartão Inter, dia 23/09/2026',
+    'IOF R$ 3,50 Tudo no Cartão Inter, dia 23/09/2026',
+  ])
+  expect(create).toHaveBeenCalledOnce()
+})
+
 it('rejects an invalid shared context that does not match expected global or payment markers', async () => {
   const create = vi.fn(async () => ({ choices: [{ message: { content: JSON.stringify({
     descriptions: ['45 mercado', '80 gasolina'], shared_context: 'banana maçã',
