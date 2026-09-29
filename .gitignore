@@ -21,3 +21,4 @@ coverage
 next-env.d.ts
 supabase/.temp
 scratch/
+.env*

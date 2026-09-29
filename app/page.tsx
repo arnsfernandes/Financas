@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { TelegramMiniAppNav } from '@/components/layout/TelegramMiniAppNav'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
+import { WebLoginScreen } from '@/components/auth/WebLoginScreen'
 import { DashboardTab } from '@/components/dashboard/DashboardTab'
 import { NewLaunchTab } from '@/components/launch/NewLaunchTab'
 import {
@@ -18,9 +19,39 @@ import { CategoriesTab } from '@/components/categories/CategoriesTab'
 export type TabType = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'new'
 
 export default function Home() {
-  const { isTelegram, fetchWithAuth, user: telegramUser } = useTelegramWebApp()
+  const { isReady, isTelegram, fetchWithAuth, user: telegramUser, logoutWeb } = useTelegramWebApp()
+  const [isWebAuthenticated, setIsWebAuthenticated] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Checa autenticação inicial para navegação web direta
+  useEffect(() => {
+    async function checkAuth() {
+      if (!isReady) return
+      if (isTelegram) {
+        setIsWebAuthenticated(true)
+        return
+      }
+      try {
+        const res = await fetch('/api/auth/me')
+        const data = await res.json()
+        if (data.ok && data.authenticated) {
+          setIsWebAuthenticated(true)
+        } else {
+          // Se for ambiente de desenvolvimento local, testar se a rota passa
+          const testRes = await fetch('/api/dashboard?period=month')
+          if (testRes.status === 401) {
+            setIsWebAuthenticated(false)
+          } else {
+            setIsWebAuthenticated(true)
+          }
+        }
+      } catch {
+        setIsWebAuthenticated(false)
+      }
+    }
+    checkAuth()
+  }, [isReady, isTelegram])
 
   // Dashboard / Period State (compartilhado com Contas, Relatórios e Exportação)
   const [dashboardData, setDashboardData] = useState<any | null>(null)
@@ -252,14 +283,30 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetchDashboard()
-    fetchTransactions()
-    fetchAccounts()
-  }, [])
+    if (isReady && (isTelegram || isWebAuthenticated === true)) {
+      fetchDashboard()
+      fetchTransactions()
+      fetchAccounts()
+    }
+  }, [isReady, isTelegram, isWebAuthenticated])
 
   // Estado para inicialização contextual de Novo Lançamento
   const [newLaunchInitialType, setNewLaunchInitialType] = useState<'expense' | 'income'>('expense')
   const [newLaunchInitialMode, setNewLaunchInitialMode] = useState<'text' | 'image' | 'manual'>('text')
+
+  // Se não estiver dentro do Telegram e não estiver autenticado na Web, exibe a tela de login
+  if (isReady && !isTelegram && isWebAuthenticated === false) {
+    return (
+      <WebLoginScreen
+        onLoginSuccess={() => {
+          setIsWebAuthenticated(true)
+          fetchDashboard()
+          fetchTransactions()
+          fetchAccounts()
+        }}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#111827] flex flex-col md:flex-row font-sans selection:bg-[#EBF2FF] selection:text-[#2F68FE]">

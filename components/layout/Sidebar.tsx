@@ -9,8 +9,10 @@ import {
   ReceiptText,
   CreditCard,
   Layers,
+  LogOut,
 } from 'lucide-react'
 import type { TabType } from '@/app/page'
+import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
 
 export interface SidebarProps {
   activeTab: TabType
@@ -29,6 +31,8 @@ export function Sidebar({
   transactionsCount,
   onNavigateTab,
 }: SidebarProps) {
+  const { isTelegram, logoutWeb } = useTelegramWebApp()
+
   const navItemsFinanceiro = [
     { id: 'dashboard' as TabType, label: 'Visão Geral', icon: LayoutDashboard },
     { id: 'transactions' as TabType, label: 'Transações', icon: ReceiptText, count: transactionsCount },
@@ -122,6 +126,19 @@ export function Sidebar({
           </div>
         </nav>
       </div>
+
+      {/* Footer / Logout Web Button */}
+      {!isTelegram && (
+        <div className="pt-3 border-t border-[#F3F4F6]">
+          <button
+            onClick={() => logoutWeb()}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-[#6B7280] hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sair da Sessão</span>
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

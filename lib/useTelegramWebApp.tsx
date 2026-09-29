@@ -20,6 +20,7 @@ export interface TelegramWebAppContextType {
   colorScheme: 'light' | 'dark'
   authHeader: string
   fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
+  logoutWeb: () => Promise<void>
   closeApp: () => void
   expandApp: () => void
   showMainButton: (text: string, onClick: () => void) => void
@@ -50,6 +51,7 @@ const TelegramWebAppContext = createContext<TelegramWebAppContextType>({
   colorScheme: 'dark',
   authHeader: '',
   fetchWithAuth: fetch,
+  logoutWeb: async () => {},
   closeApp: () => {},
   expandApp: () => {},
   showMainButton: () => {},
@@ -87,8 +89,18 @@ export function TelegramWebAppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const authHeader = initData ? `Bearer ${initData}` : ''
-
   const fetchWithAuth = buildAuthenticatedFetch(initData)
+
+  const logoutWeb = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+      if (typeof window !== 'undefined') {
+        window.location.reload()
+      }
+    } catch (e) {
+      console.error('Falha ao fazer logout:', e)
+    }
+  }
 
   const closeApp = () => {
     if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp?.close) {
@@ -129,6 +141,7 @@ export function TelegramWebAppProvider({ children }: { children: ReactNode }) {
         colorScheme,
         authHeader,
         fetchWithAuth,
+        logoutWeb,
         closeApp,
         expandApp,
         showMainButton,

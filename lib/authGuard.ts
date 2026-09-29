@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyTelegramAuth } from './telegramAuth'
+import { verifyWebSessionFromRequest } from './webAuth'
 
 /**
  * Checks if the request is genuinely originating from a local machine loopback
@@ -60,15 +61,13 @@ export function isTrulyLocalRequest(req: NextRequest): boolean {
  * Universal authentication guard for financial API endpoints.
  *
  * Security Requirements:
- * 1. Only accepts Telegram initData via Authorization header ('Bearer <initData>' or 'tma <initData>') or 'x-telegram-init-data'.
- *    NEVER accepts initData via query string / URL parameters.
- * 2. Strictly validates HMAC-SHA256 signature against TELEGRAM_BOT_TOKEN.
- * 3. Enforces session freshness (auth_date maximum age).
- * 4. Strictly enforces that the parsed user ID matches TELEGRAM_ALLOWED_USER_ID.
- * 5. Returns 401 (or 403) for any request missing signature, with invalid signature, expired date, or unauthorized user ID.
- * 6. Fallback is ONLY allowed when the request is purely local (localhost / 127.0.0.1 in non-production).
+ * 1. Accepts Telegram initData via Authorization header ('Bearer <initData>' or 'tma <initData>') or 'x-telegram-init-data'.
+ *    Strictly validates HMAC-SHA256 signature against TELEGRAM_BOT_TOKEN and checks TELEGRAM_ALLOWED_USER_ID.
+ * 2. Accepts valid Web Session Cookie signed with WEB_SESSION_SECRET / WEB_ACCESS_PASSWORD for direct browser access.
+ * 3. Fallback is ONLY allowed when the request is purely local (localhost / 127.0.0.1 in non-production).
+ * 4. Returns 401 for any unauthorized, invalid or missing credentials.
  */
-export function requireFinancialAuth(req: NextRequest): { authorized: boolean; response?: NextResponse; user?: any } {
+export function requireFinancialAuth(req: NextRequest): { authorized: boolean; response?: NextResponse; user?: any; authType?: 'telegram' | 'web' | 'local' } {
   const authHeader = req.headers.get('authorization') || req.headers.get('x-telegram-init-data')
 
   // 1. If Telegram credentials are provided in headers, strictly validate HMAC and User ID
@@ -83,23 +82,34 @@ export function requireFinancialAuth(req: NextRequest): { authorized: boolean; r
         ),
       }
     }
-    return { authorized: true, user: auth.user }
+    return { authorized: true, user: auth.user, authType: 'telegram' }
   }
 
-  // 2. If no Telegram credentials, check if the request is TRULY local in development
+  // 2. Check for Web session cookie (independent direct browser login)
+  const webAuth = verifyWebSessionFromRequest(req)
+  if (webAuth.valid) {
+    return { authorized: true, user: { isWebUser: true }, authType: 'web' }
+  }
+
+  // 3. In local development without proxies, allow loopback access
   if (isTrulyLocalRequest(req)) {
-    return { authorized: true }
+    return { authorized: true, authType: 'local' }
   }
 
-  // 3. Any remote, proxy, tunnel, public host or production request without valid Telegram auth is rejected
+  // 4. Any remote, proxy, tunnel, public host or production request without valid Telegram or Web auth is rejected
+  const detailedError = webAuth.error && webAuth.error !== 'Cookie de sessão não encontrado'
+    ? `Autenticação inválida: ${webAuth.error}`
+    : 'Autenticação obrigatória. Acesso bloqueado para requisições externas sem credencial válida.'
+
   return {
     authorized: false,
     response: NextResponse.json(
       {
         ok: false,
-        error: 'Autenticação do Telegram obrigatória. Acesso bloqueado para requisições externas sem assinatura válida.',
+        error: detailedError,
       },
       { status: 401 }
     ),
   }
 }
+
