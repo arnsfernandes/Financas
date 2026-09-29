@@ -398,6 +398,7 @@ export function NewLaunchTab({
           recurrence_status: recPlan.recurrence_status,
           installment_total: instTotal,
           installment_current: instCurrent,
+          installment_date_anchor: plan.installmentDateAnchor,
           items: reviewItems.map((it) => ({
             description: it.description,
             quantity: it.quantity ?? 1,

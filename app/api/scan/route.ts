@@ -14,13 +14,15 @@ function previewResponse(parsed: { receipt: Receipt; originalExtractedData: Reco
   const receipt = { ...parsed.receipt }
   const plan = resolveInstallmentPlan({ total: receipt.total || 0, subtotal: receipt.subtotal,
     installmentTotal: receipt.installment_total, installmentCurrent: receipt.installment_current,
-    installmentAmount: receipt.installment_amount, notes: receipt.notes, vendor: receipt.vendor })
+    installmentAmount: receipt.installment_amount, installmentDateAnchor: receipt.installment_date_anchor,
+    notes: receipt.notes, vendor: receipt.vendor, rawText })
   if (plan.isMultiInstallment) {
     receipt.total = plan.installmentAmount
     receipt.subtotal = plan.totalPurchaseAmount
     receipt.installment_amount = plan.installmentAmount
     receipt.installment_total = plan.installmentTotal
     receipt.installment_current = plan.installmentCurrent
+    receipt.installment_date_anchor = plan.installmentDateAnchor
   }
   // A draft is not an existing installment group. save creates the group on confirmation.
   receipt.installment_group_id = null
@@ -92,8 +94,10 @@ export async function POST(req: NextRequest) {
               installmentTotal: receipt.installment_total,
               installmentCurrent: receipt.installment_current,
               installmentAmount: receipt.installment_amount,
+              installmentDateAnchor: receipt.installment_date_anchor,
               notes: receipt.notes,
               vendor: receipt.vendor,
+              rawText: desc,
             })
             if (plan.isMultiInstallment) {
               receipt.total = plan.installmentAmount
@@ -101,6 +105,7 @@ export async function POST(req: NextRequest) {
               receipt.installment_amount = plan.installmentAmount
               receipt.installment_total = plan.installmentTotal
               receipt.installment_current = plan.installmentCurrent
+              receipt.installment_date_anchor = plan.installmentDateAnchor
             }
             receipt.installment_group_id = null
             const validation = validateReceipt(parsed.receipt)

@@ -646,8 +646,8 @@ describe('Real Installments in Database', () => {
   describe('Installment Domain Module (lib/installments)', () => {
     describe('parseInstallmentFromText', () => {
       it('parses "parcelado em 3x" and "4x sem juros"', () => {
-        expect(parseInstallmentFromText('Compra no cartão parcelado em 3x')).toEqual({ total: 3, current: 1 })
-        expect(parseInstallmentFromText('Loja ABC 4x sem juros')).toEqual({ total: 4, current: 1 })
+        expect(parseInstallmentFromText('Compra no cartão parcelado em 3x')).toEqual({ total: 3, current: 1, anchor: 'purchase_date' })
+        expect(parseInstallmentFromText('Loja ABC 4x sem juros')).toEqual({ total: 4, current: 1, anchor: 'purchase_date' })
         expect(parseInstallmentFromText('Pagamento à vista')).toBeNull()
       })
     })
@@ -708,7 +708,7 @@ describe('Real Installments in Database', () => {
       })
     })
 
-    describe('generateInstallmentDates', () => {
+    describe('generateInstallmentDates - explicit date anchors', () => {
       it('generates chronological dates for each installment', () => {
         const dates = generateInstallmentDates('2026-09-23', 3, 1)
         expect(dates).toEqual([
@@ -718,23 +718,91 @@ describe('Real Installments in Database', () => {
         ])
       })
 
-      it('correctly calculates 12 installments from purchase date 28/11/2025 with 11/12 in 2026-09-28 and 12/12 in 2026-10-28', () => {
-        const dates = generateInstallmentDates('2025-11-28', 12, 1)
-        expect(dates).toHaveLength(12)
+      it('case 1: primeira parcela 26/06/2026, current=4, total=6, anchor=purchase_date -> 1/6 Junho, 2/6 Julho, 3/6 Agosto, 4/6 Setembro, 5/6 Outubro, 6/6 Novembro', () => {
+        const dates = generateInstallmentDates('2026-06-26', 6, 4, 'purchase_date')
+        expect(dates).toHaveLength(6)
         expect(dates).toEqual([
-          { installmentCurrent: 1, date: '2025-11-28' },
-          { installmentCurrent: 2, date: '2025-12-28' },
-          { installmentCurrent: 3, date: '2026-01-28' },
-          { installmentCurrent: 4, date: '2026-02-28' },
-          { installmentCurrent: 5, date: '2026-03-28' },
-          { installmentCurrent: 6, date: '2026-04-28' },
-          { installmentCurrent: 7, date: '2026-05-28' },
-          { installmentCurrent: 8, date: '2026-06-28' },
-          { installmentCurrent: 9, date: '2026-07-28' },
-          { installmentCurrent: 10, date: '2026-08-28' },
-          { installmentCurrent: 11, date: '2026-09-28' },
-          { installmentCurrent: 12, date: '2026-10-28' },
+          { installmentCurrent: 1, date: '2026-06-26' },
+          { installmentCurrent: 2, date: '2026-07-26' },
+          { installmentCurrent: 3, date: '2026-08-26' },
+          { installmentCurrent: 4, date: '2026-09-26' },
+          { installmentCurrent: 5, date: '2026-10-26' },
+          { installmentCurrent: 6, date: '2026-11-26' },
         ])
+      })
+
+      it('case 2: data da parcela atual 26/09/2026, current=4, total=6, anchor=current_installment -> produces EXACTLY the same sequence', () => {
+        const dates = generateInstallmentDates('2026-09-26', 6, 4, 'current_installment')
+        expect(dates).toHaveLength(6)
+        expect(dates).toEqual([
+          { installmentCurrent: 1, date: '2026-06-26' },
+          { installmentCurrent: 2, date: '2026-07-26' },
+          { installmentCurrent: 3, date: '2026-08-26' },
+          { installmentCurrent: 4, date: '2026-09-26' },
+          { installmentCurrent: 5, date: '2026-10-26' },
+          { installmentCurrent: 6, date: '2026-11-26' },
+        ])
+      })
+
+      it('case 3: compra 28/11/2025, 12x -> 1/12 in 28/11/2025 and 12/12 in 28/10/2026', () => {
+        const dates = generateInstallmentDates('2025-11-28', 12, 1, 'purchase_date')
+        expect(dates).toHaveLength(12)
+        expect(dates[0]).toEqual({ installmentCurrent: 1, date: '2025-11-28' })
+        expect(dates[1]).toEqual({ installmentCurrent: 2, date: '2025-12-28' })
+        expect(dates[2]).toEqual({ installmentCurrent: 3, date: '2026-01-28' })
+        expect(dates[10]).toEqual({ installmentCurrent: 11, date: '2026-09-28' })
+        expect(dates[11]).toEqual({ installmentCurrent: 12, date: '2026-10-28' })
+      })
+
+      it('case 4: current=1 continues functioning normally with both anchors', () => {
+        const d1 = generateInstallmentDates('2026-05-10', 4, 1, 'purchase_date')
+        const d2 = generateInstallmentDates('2026-05-10', 4, 1, 'current_installment')
+        expect(d1).toEqual(d2)
+        expect(d1).toEqual([
+          { installmentCurrent: 1, date: '2026-05-10' },
+          { installmentCurrent: 2, date: '2026-06-10' },
+          { installmentCurrent: 3, date: '2026-07-10' },
+          { installmentCurrent: 4, date: '2026-08-10' },
+        ])
+      })
+
+      it('case 5: preserves year transitions and month-end clamping (e.g. 2026-01-31 in 4x)', () => {
+        const dates = generateInstallmentDates('2026-01-31', 4, 1, 'purchase_date')
+        expect(dates).toEqual([
+          { installmentCurrent: 1, date: '2026-01-31' },
+          { installmentCurrent: 2, date: '2026-02-28' },
+          { installmentCurrent: 3, date: '2026-03-31' },
+          { installmentCurrent: 4, date: '2026-04-30' },
+        ])
+      })
+    })
+
+    describe('parseInstallmentFromText with fractions and anchor keywords', () => {
+      it('parses fraction "parcela 4/6" as current=4, total=6, anchor=current_installment', () => {
+        const res = parseInstallmentFromText('Shopee compra parcela 4/6 no cartão')
+        expect(res).toEqual({
+          total: 6,
+          current: 4,
+          anchor: 'current_installment',
+        })
+      })
+
+      it('parses "primeira parcela 26/06/2026 4/6" with anchor=purchase_date', () => {
+        const res = parseInstallmentFromText('primeira parcela 26/06/2026 parcela 4 de 6')
+        expect(res).toEqual({
+          total: 6,
+          current: 4,
+          anchor: 'purchase_date',
+        })
+      })
+
+      it('parses "comprado em 28/11/2025 em 12x" as current=1, total=12, anchor=purchase_date', () => {
+        const res = parseInstallmentFromText('comprado em 28/11/2025 em 12x')
+        expect(res).toEqual({
+          total: 12,
+          current: 1,
+          anchor: 'purchase_date',
+        })
       })
     })
 
@@ -792,6 +860,101 @@ describe('Real Installments in Database', () => {
         expect(rows[9].date).toBe('2026-09-28')
         expect(rows[10].installment_current).toBe(12)
         expect(rows[10].date).toBe('2026-10-28')
+      })
+
+      it('builds sibling rows when starting from intermediate installment (current=4 of 6, anchor=purchase_date)', () => {
+        const plan = resolveInstallmentPlan({
+          total: 387.06,
+          installmentTotal: 6,
+          installmentCurrent: 4,
+          installmentDateAnchor: 'purchase_date',
+        })
+        const rows = buildFutureInstallmentRows(
+          {
+            account_id: 'acc-1',
+            category: 'Compras',
+            vendor: 'Shopee',
+            type: 'expense',
+          },
+          plan,
+          '2026-06-26'
+        )
+
+        // Sibling rows: 1, 2, 3, 5, 6 (skips 4)
+        expect(rows).toHaveLength(5)
+        expect(rows.map((r) => ({ current: r.installment_current, date: r.date }))).toEqual([
+          { current: 1, date: '2026-06-26' },
+          { current: 2, date: '2026-07-26' },
+          { current: 3, date: '2026-08-26' },
+          { current: 5, date: '2026-10-26' },
+          { current: 6, date: '2026-11-26' },
+        ])
+      })
+    })
+
+    describe('save persistence with anchor semantics', () => {
+      it('calculates the complete timeline first and assigns correct date to primary row (current=4, anchor=purchase_date)', async () => {
+        const insertedRows: any[] = []
+        const mockSupabase: any = {
+          from: (table: string) => {
+            if (table === 'transactions') {
+              return {
+                insert: vi.fn().mockImplementation((rows: any) => {
+                  if (Array.isArray(rows)) insertedRows.push(...rows)
+                  else insertedRows.push(rows)
+                  return { error: null }
+                }),
+              }
+            }
+            return {
+              select: () => ({ or: () => ({ data: [], error: null }) }),
+              insert: () => ({ select: () => ({ single: () => ({ data: { id: 'dummy' }, error: null }) }) }),
+            }
+          },
+        }
+        setSupabaseClientForTesting(mockSupabase)
+
+        const receipt: Receipt = {
+          type: 'expense',
+          vendor: 'Shopee',
+          vendor_address: null,
+          date: '2026-06-26', // Primeira parcela em junho
+          time: '10:00',
+          currency: 'BRL',
+          category: 'Compras',
+          subtotal: 387.06,
+          tax: 0,
+          tip: 0,
+          total: 387.06,
+          payment_method: 'Cartão de Crédito',
+          notes: 'primeira parcela em 26/06/2026',
+          installment_total: 6,
+          installment_current: 4,
+          installment_date_anchor: 'purchase_date',
+        }
+
+        const saved = await save({
+          receipt,
+          imageKey: null,
+          imageSha256: null,
+          allowDuplicate: true,
+        })
+
+        // Primary row returned and inserted should have date = 2026-09-26 (installment 4)
+        expect(saved.date).toBe('2026-09-26')
+        expect(saved.installment_current).toBe(4)
+        expect(saved.installment_total).toBe(6)
+
+        expect(insertedRows).toHaveLength(6)
+        const sorted = [...insertedRows].sort((a, b) => a.installment_current - b.installment_current)
+        expect(sorted.map((r) => ({ current: r.installment_current, date: r.date }))).toEqual([
+          { current: 1, date: '2026-06-26' },
+          { current: 2, date: '2026-07-26' },
+          { current: 3, date: '2026-08-26' },
+          { current: 4, date: '2026-09-26' },
+          { current: 5, date: '2026-10-26' },
+          { current: 6, date: '2026-11-26' },
+        ])
       })
     })
   })

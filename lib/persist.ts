@@ -1,7 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Receipt, StoredReceipt } from './schema'
 import { detectDuplicateTransaction, type DuplicateCheckResult } from './duplicate'
-import { resolveInstallmentPlan, buildFutureInstallmentRows, generateUUID } from './installments'
+import { resolveInstallmentPlan, buildFutureInstallmentRows, generateInstallmentDates, generateUUID } from './installments'
 import { resolveRecurrenceUpdate } from './recurrence'
 
 export interface PersistInput {
@@ -122,6 +122,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
     installmentTotal: input.receipt.installment_total,
     installmentCurrent: input.receipt.installment_current,
     installmentAmount: input.receipt.installment_amount,
+    installmentDateAnchor: input.receipt.installment_date_anchor,
     subtotal: input.receipt.subtotal,
     installmentGroupId: input.receipt.installment_group_id,
     notes: input.receipt.notes,
@@ -150,6 +151,22 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
   const validation = validateReceipt(input.receipt)
   const reviewStatus = validation.reviewStatus === 'needs_review' ? 'needs_review' : (input.receipt.review_status || 'confirmed')
   const reviewReasons = Array.from(new Set([...(input.receipt.review_reasons || []), ...validation.reviewReasons]))
+  const baseDate = input.receipt.date || scannedAt.slice(0, 10)
+  let allInstallmentDates: { installmentCurrent: number; date: string }[] = []
+  let primaryRowDate = input.receipt.date || null
+
+  if (isMultiInstallment && totalInstallments && installmentGroupId) {
+    allInstallmentDates = generateInstallmentDates(
+      baseDate,
+      totalInstallments,
+      firstInstallmentCurrent || 1,
+      plan.installmentDateAnchor
+    )
+    const matched = allInstallmentDates.find((d) => d.installmentCurrent === (firstInstallmentCurrent || 1))
+    if (matched) {
+      primaryRowDate = matched.date
+    }
+  }
 
   if (supabase) {
     // Check for duplicates before persisting
@@ -260,8 +277,6 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
         effectiveReviewStatus = 'needs_review'
       }
 
-      const baseDate = input.receipt.date || scannedAt.slice(0, 10)
-
       // Build array of all transactions to insert in a single batch
       const allTxRowsToInsert: any[] = [
         {
@@ -272,7 +287,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
           type: input.receipt.type || 'expense',
           vendor: input.receipt.vendor,
           vendor_address: input.receipt.vendor_address,
-          date: input.receipt.date || null,
+          date: primaryRowDate,
           time: input.receipt.time || null,
           currency: input.receipt.currency || 'BRL',
           category: resolvedCategoryName,
@@ -394,12 +409,14 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
   return {
     ...input.receipt,
     id,
+    date: isMultiInstallment && primaryRowDate ? primaryRowDate : input.receipt.date,
     subtotal: totalPurchaseAmount,
     total: firstInstallmentTotal,
     installment_group_id: installmentGroupId,
     installment_current: firstInstallmentCurrent,
     installment_total: totalInstallments,
     installment_amount: installmentAmount,
+    installment_date_anchor: plan.installmentDateAnchor,
     image_key: input.imageKey,
     image_sha256: input.imageSha256,
     origin_type: originType,

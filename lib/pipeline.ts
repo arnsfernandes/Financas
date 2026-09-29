@@ -19,6 +19,7 @@ export interface ProcessOptions {
   installmentCurrent?: number | null
   installmentAmount?: number | null
   installmentGroupId?: string | null
+  installmentDateAnchor?: 'purchase_date' | 'current_installment' | null
   allowDuplicate?: boolean
   filename?: string | null
   rawText?: string | null
@@ -105,6 +106,7 @@ export async function parseReceiptImage(
     installmentCurrent: options?.installmentCurrent,
     installmentAmount: options?.installmentAmount,
     installmentGroupId: options?.installmentGroupId,
+    installmentDateAnchor: options?.installmentDateAnchor,
     subtotal: receipt.subtotal,
     notes: receipt.notes,
     vendor: receipt.vendor,
@@ -116,6 +118,7 @@ export async function parseReceiptImage(
     receipt.installment_current = plan.installmentCurrent
     receipt.installment_amount = plan.installmentAmount
     receipt.installment_group_id = plan.installmentGroupId
+    receipt.installment_date_anchor = plan.installmentDateAnchor
     receipt.subtotal = plan.totalPurchaseAmount
   }
 
@@ -236,6 +239,7 @@ export async function parseTextExpense(
     installmentCurrent: options?.installmentCurrent,
     installmentAmount: options?.installmentAmount,
     installmentGroupId: options?.installmentGroupId,
+    installmentDateAnchor: options?.installmentDateAnchor,
     subtotal: receipt.subtotal,
     notes: receipt.notes,
     rawText: text,
@@ -247,6 +251,7 @@ export async function parseTextExpense(
     receipt.installment_current = plan.installmentCurrent
     receipt.installment_amount = plan.installmentAmount
     receipt.installment_group_id = plan.installmentGroupId
+    receipt.installment_date_anchor = plan.installmentDateAnchor
     receipt.subtotal = plan.totalPurchaseAmount
   }
 

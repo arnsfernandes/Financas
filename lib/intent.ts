@@ -193,6 +193,7 @@ const CORRECTION_JSON_SCHEMA = {
     account_name_or_institution: { type: ['string', 'null'] },
     type: { type: ['string', 'null'], enum: ['expense', 'income', null] },
     installment_total: { type: ['number', 'null'] },
+    installment_current: { type: ['number', 'null'] },
     is_recurring: { type: ['boolean', 'null'] },
     notes: { type: ['string', 'null'] },
     changed_fields: {
@@ -209,6 +210,7 @@ const CORRECTION_JSON_SCHEMA = {
     'account_name_or_institution',
     'type',
     'installment_total',
+    'installment_current',
     'is_recurring',
     'notes',
     'changed_fields',
@@ -283,7 +285,7 @@ RULES:
   const changedFields: string[] = Array.isArray(parsed.changed_fields) ? parsed.changed_fields : []
   // The editor returns a patch, not a replacement receipt. Ignore echoed or
   // unrelated values even when the model returns them as non-null fields.
-  for (const field of ['total', 'vendor', 'category', 'payment_method', 'date', 'type', 'installment_total', 'is_recurring', 'notes', 'account_name_or_institution']) {
+  for (const field of ['total', 'vendor', 'category', 'payment_method', 'date', 'type', 'installment_total', 'installment_current', 'is_recurring', 'notes', 'account_name_or_institution']) {
     const requested = changedFields.includes(field) || (field === 'account_name_or_institution' && changedFields.includes('account_id'))
     if (!requested) parsed[field] = null
   }
@@ -318,6 +320,10 @@ RULES:
       updatedReceipt.installment_amount = Math.round((updatedReceipt.total / parsed.installment_total) * 100) / 100
     }
     if (!changedFields.includes('installment_total')) changedFields.push('installment_total')
+  }
+  if (typeof parsed.installment_current === 'number') {
+    updatedReceipt.installment_current = parsed.installment_current
+    if (!changedFields.includes('installment_current')) changedFields.push('installment_current')
   }
   if (typeof parsed.is_recurring === 'boolean') {
     updatedReceipt.is_recurring = parsed.is_recurring

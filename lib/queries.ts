@@ -964,6 +964,7 @@ export interface UpdateTransactionInput {
   installment_current?: number | null
   installment_total?: number | null
   installment_amount?: number | null
+  installment_date_anchor?: 'purchase_date' | 'current_installment' | null
   review_status?: 'confirmed' | 'needs_review'
   review_reasons?: string[]
   items?: {
@@ -1055,6 +1056,7 @@ export async function updateTransaction(id: string, input: UpdateTransactionInpu
     installmentTotal: input.installment_total,
     installmentCurrent: input.installment_current,
     installmentAmount: input.installment_amount,
+    installmentDateAnchor: input.installment_date_anchor,
     subtotal: input.subtotal,
     installmentGroupId: input.installment_group_id,
     notes: input.notes,

@@ -2,7 +2,7 @@ import { getCurrentDateTimeContext } from './vision'
 import type { Account, Category, Receipt } from './schema'
 import { normalizeInstitutionKey } from './institutions'
 import { normalizeCategoryName } from './queries'
-import { resolveInstallmentPlan } from './installments'
+import { resolveInstallmentPlan, parseInstallmentFromText } from './installments'
 
 export interface LocalRoutingStats {
   localQueries: number
@@ -460,16 +460,17 @@ export function parseSingleTransactionLocally(
 
   // 6. Extract Installments (Parcelas)
   let installmentTotal: number | null = null
+  let installmentCurrent: number | null = null
   let installmentAmount: number | null = null
-  const instMatch = norm.match(/\b(?:em\s+)?(\d{1,2})\s*(?:x|vezes|parcelas?)\b/i)
-  if (instMatch) {
-    const num = parseInt(instMatch[1], 10)
-    if (num > 1) {
-      installmentTotal = num
-      installmentAmount = Math.round((total / num) * 100) / 100
-      if (!paymentMethod) {
-        paymentMethod = 'Cartão de Crédito'
-      }
+  let installmentDateAnchor: 'purchase_date' | 'current_installment' | null = null
+  const parsedInst = parseInstallmentFromText(rawText)
+  if (parsedInst) {
+    installmentTotal = parsedInst.total
+    installmentCurrent = parsedInst.current
+    installmentDateAnchor = parsedInst.anchor || (parsedInst.current === 1 ? 'purchase_date' : 'current_installment')
+    installmentAmount = Math.round((total / parsedInst.total) * 100) / 100
+    if (!paymentMethod) {
+      paymentMethod = 'Cartão de Crédito'
     }
   }
 
@@ -607,7 +608,9 @@ export function parseSingleTransactionLocally(
       },
     ],
     installment_total: installmentTotal,
+    installment_current: installmentCurrent,
     installment_amount: installmentAmount,
+    installment_date_anchor: installmentDateAnchor,
     is_recurring: isRecurring,
     recurrence_frequency: recurrenceFrequency,
   }

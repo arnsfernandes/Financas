@@ -24,6 +24,8 @@ export function generateUUID(): string {
  * - creating and updating installment rows across the database
  */
 
+export type InstallmentDateAnchor = 'purchase_date' | 'current_installment'
+
 export interface InstallmentPlanInput {
   total: number
   installmentTotal?: number | null
@@ -31,6 +33,7 @@ export interface InstallmentPlanInput {
   installmentAmount?: number | null
   subtotal?: number | null // Total purchase amount (subtotal)
   installmentGroupId?: string | null
+  installmentDateAnchor?: InstallmentDateAnchor | null
   notes?: string | null
   vendor?: string | null
   rawText?: string | null
@@ -41,6 +44,7 @@ export interface InstallmentPlanInput {
     installment_current?: number | null
     installment_amount?: number | null
     installment_group_id?: string | null
+    installment_date_anchor?: InstallmentDateAnchor | null
     notes?: string | null
     raw_text?: string | null
   } | null
@@ -53,24 +57,49 @@ export interface InstallmentPlanResult {
   installmentAmount: number | null
   totalPurchaseAmount: number | null
   installmentGroupId: string | null
+  installmentDateAnchor: InstallmentDateAnchor
 }
 
 /**
- * Parses installment count from text (e.g. "parcelado em 4x", "12x no cartão").
+ * Parses installment count from text (e.g. "parcelado em 4x", "12x no cartão", "parcela 4/6", "4 de 6").
  */
-export function parseInstallmentFromText(text?: string | null): { total: number; current: number } | null {
+export function parseInstallmentFromText(
+  text?: string | null
+): { total: number; current: number; anchor?: InstallmentDateAnchor } | null {
   if (!text) return null
 
-  const m1 = text.match(/(?:parcelad[oa]\s+em\s+|em\s+)(\d+)\s*(?:x|vezes)/i)
-  if (m1) {
-    const val = parseInt(m1[1], 10)
-    if (val > 1) return { total: val, current: 1 }
+  // Mask full dates (e.g. 26/06/2026 or 26/06/26) so they are not misparsed as fractions
+  const sanitized = text.replace(/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/g, ' ')
+
+  // e.g. "parcela 4/6", "4/6", "parcela 4 de 6", "4 de 6"
+  const mFraction = sanitized.match(/\b(?:parcela\s+)?(\d{1,2})\s*(?:\/|\s+de\s+)(\d{1,2})\b/i)
+  if (mFraction) {
+    const curr = parseInt(mFraction[1], 10)
+    const tot = parseInt(mFraction[2], 10)
+    if (tot > 1 && curr >= 1 && curr <= tot) {
+      const isPurchaseAnchor = /\b(primeira\s+parcela|1[aª]\s+parcela|compra\s+(?:feita\s+)?em|comprad[oa]\s+em|in[ií]cio\s+em|come[cç]ou\s+em)\b/i.test(text)
+      return {
+        total: tot,
+        current: curr,
+        anchor: isPurchaseAnchor ? 'purchase_date' : 'current_installment',
+      }
+    }
   }
 
-  const m2 = text.match(/\b(\d+)\s*x\s*(?:no\s+cart[aã]o|sem\s+juros)?\b/i)
+  const m1 = sanitized.match(/(?:parcelad[oa]\s+em\s+|em\s+)(\d+)\s*(?:x|vezes)/i)
+  if (m1) {
+    const val = parseInt(m1[1], 10)
+    if (val > 1) {
+      return { total: val, current: 1, anchor: 'purchase_date' }
+    }
+  }
+
+  const m2 = sanitized.match(/\b(\d+)\s*x\s*(?:no\s+cart[aã]o|sem\s+juros)?\b/i)
   if (m2) {
     const val = parseInt(m2[1], 10)
-    if (val > 1 && val <= 96) return { total: val, current: 1 }
+    if (val > 1 && val <= 96) {
+      return { total: val, current: 1, anchor: 'purchase_date' }
+    }
   }
 
   return null
@@ -85,33 +114,49 @@ export function parseInstallmentFromText(text?: string | null): { total: number;
  */
 export function resolveInstallmentPlan(input: InstallmentPlanInput): InstallmentPlanResult {
   let totalInstallments = input.installmentTotal && input.installmentTotal > 1 ? input.installmentTotal : null
+  let currentInstallment = input.installmentCurrent ?? input.existingTx?.installment_current ?? null
+  let detectedAnchor: InstallmentDateAnchor | null =
+    input.installmentDateAnchor || (input.existingTx as any)?.installment_date_anchor || null
 
-  // Fallback text check if not explicitly provided
-  if (!totalInstallments) {
-    const textToCheck = `${input.notes || ''} ${input.vendor || ''} ${input.rawText || ''} ${input.existingTx?.notes || ''} ${input.existingTx?.raw_text || ''}`
-    const parsed = parseInstallmentFromText(textToCheck)
-    if (parsed && !input.existingTx?.installment_group_id) {
+  const textToCheck = `${input.notes || ''} ${input.vendor || ''} ${input.rawText || ''} ${input.existingTx?.notes || ''} ${input.existingTx?.raw_text || ''}`
+
+  // Check text for installments and anchor
+  const parsed = parseInstallmentFromText(textToCheck)
+  if (parsed) {
+    if (!totalInstallments && !input.existingTx?.installment_group_id) {
       totalInstallments = parsed.total
     }
+    if (!currentInstallment && !input.existingTx?.installment_current) {
+      currentInstallment = parsed.current
+    }
+    if (!detectedAnchor && parsed.anchor) {
+      detectedAnchor = parsed.anchor
+    }
+  }
+
+  if (!detectedAnchor && /\b(primeira\s+parcela|1[aª]\s+parcela|compra\s+(?:feita\s+)?em|comprad[oa]\s+em|in[ií]cio\s+em|come[cç]ou\s+em)\b/i.test(textToCheck)) {
+    detectedAnchor = 'purchase_date'
   }
 
   const isMultiInstallment = typeof totalInstallments === 'number' && totalInstallments > 1
 
+  const safeCurrent = currentInstallment ?? 1
+  const effectiveAnchor: InstallmentDateAnchor = detectedAnchor || (safeCurrent === 1 ? 'purchase_date' : 'current_installment')
+
   if (!isMultiInstallment) {
-    const current = input.installmentCurrent ?? input.existingTx?.installment_current ?? null
     const existingGroupId = input.installmentGroupId || input.existingTx?.installment_group_id || null
     return {
       isMultiInstallment: false,
       installmentTotal: null,
-      installmentCurrent: current,
+      installmentCurrent: currentInstallment,
       installmentAmount: null,
       totalPurchaseAmount: input.subtotal ?? (input.total > 0 ? input.total : null),
       installmentGroupId: existingGroupId,
+      installmentDateAnchor: effectiveAnchor,
     }
   }
 
   const safeTotalInstallments = totalInstallments!
-  const currentInstallment = input.installmentCurrent ?? input.existingTx?.installment_current ?? 1
   const groupId = input.installmentGroupId || input.existingTx?.installment_group_id || generateUUID()
 
   const providedTotal = input.total !== undefined && !isNaN(input.total)
@@ -163,26 +208,36 @@ export function resolveInstallmentPlan(input: InstallmentPlanInput): Installment
   return {
     isMultiInstallment: true,
     installmentTotal: safeTotalInstallments,
-    installmentCurrent: currentInstallment,
+    installmentCurrent: safeCurrent,
     installmentAmount: instAmount,
     totalPurchaseAmount,
     installmentGroupId: groupId,
+    installmentDateAnchor: effectiveAnchor,
   }
 }
 
 /**
  * Computes chronological monthly dates for all installments in a plan.
+ * Supports explicit anchor semantics:
+ * - 'purchase_date': baseDate is the 1st installment date (purchase date), so date_i = baseDate + (i - 1) months.
+ * - 'current_installment': baseDate is installment currentInstallment date, so purchaseDate = baseDate - (current - 1) months and date_i = purchaseDate + (i - 1) months.
  */
 export function generateInstallmentDates(
   baseDate: string,
   totalInstallments: number,
-  currentInstallment: number = 1
+  currentInstallment: number = 1,
+  anchor: InstallmentDateAnchor = 'current_installment'
 ): { installmentCurrent: number; date: string }[] {
   const result: { installmentCurrent: number; date: string }[] = []
+
+  const purchaseDate = anchor === 'purchase_date'
+    ? baseDate
+    : addMonthsToDate(baseDate, -(currentInstallment - 1))
+
   for (let i = 1; i <= totalInstallments; i++) {
     result.push({
       installmentCurrent: i,
-      date: addMonthsToDate(baseDate, i - currentInstallment),
+      date: addMonthsToDate(purchaseDate, i - 1),
     })
   }
   return result
@@ -214,7 +269,7 @@ export interface BaseInstallmentRowTemplate {
 }
 
 /**
- * Builds all future transaction rows (installments 2..N) for persistence.
+ * Builds all sibling transaction rows (installments != current) for persistence.
  */
 export function buildFutureInstallmentRows(
   template: BaseInstallmentRowTemplate,
@@ -226,7 +281,12 @@ export function buildFutureInstallmentRows(
   }
 
   const rows: any[] = []
-  const dates = generateInstallmentDates(baseDate, plan.installmentTotal, plan.installmentCurrent || 1)
+  const dates = generateInstallmentDates(
+    baseDate,
+    plan.installmentTotal,
+    plan.installmentCurrent || 1,
+    plan.installmentDateAnchor
+  )
 
   for (const { installmentCurrent, date } of dates) {
     if (installmentCurrent === (plan.installmentCurrent || 1)) continue
@@ -327,7 +387,7 @@ export async function syncInstallmentGroup(
     }
   }
 
-  const dates = generateInstallmentDates(baseDate, totalInstallments, currentInstallment)
+  const dates = generateInstallmentDates(baseDate, totalInstallments, currentInstallment, plan.installmentDateAnchor)
   const rowsToInsert: any[] = []
 
   for (const { installmentCurrent: instNum, date: instDate } of dates) {

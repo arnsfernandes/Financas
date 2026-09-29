@@ -85,6 +85,7 @@ export const receiptSchema = z.object({
   installment_current: z.number().nullable().optional(),
   installment_total: z.number().nullable().optional(),
   installment_amount: z.number().nullable().optional(),
+  installment_date_anchor: z.enum(['purchase_date', 'current_installment']).nullable().optional(),
   // Review Status
   review_status: z.enum(['confirmed', 'needs_review']).default('confirmed').optional(),
   review_reasons: z.array(z.string()).default([]).optional(),
@@ -146,6 +147,7 @@ export function normaliseReceipt(input: unknown): Receipt {
     installment_current: parsed.installment_current ?? null,
     installment_total: parsed.installment_total ?? null,
     installment_amount: parsed.installment_amount ?? null,
+    installment_date_anchor: parsed.installment_date_anchor ?? null,
     review_status: parsed.review_status ?? 'confirmed',
     review_reasons: parsed.review_reasons ?? [],
     items: (parsed.items ?? []).map((item) => {
