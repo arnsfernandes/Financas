@@ -1,27 +1,298 @@
 import { scanReceipt } from './vision'
 import { store } from './storage'
 import { save } from './persist'
-import type { StoredReceipt } from './schema'
+import { resolveInstallmentPlan } from './installments'
+import { resolveRecurrenceUpdate } from './recurrence'
+import type { Receipt, StoredReceipt } from './schema'
 
 /**
  * The end-to-end scan pipeline for images: store the original, run the AI call, and
  * persist the validated result.
  */
-export async function processReceipt(
-  buffer: Buffer,
-  contentType: string,
-): Promise<StoredReceipt> {
-  const stored = await store(buffer, contentType)
-  const { receipt } = await scanReceipt(buffer, contentType)
-  return save({ receipt, imageKey: stored.key, imageSha256: stored.sha256, sourceType: 'image' })
+export interface ProcessOptions {
+  overrideType?: 'expense' | 'income'
+  accountId?: string | null
+  isRecurring?: boolean
+  recurrenceFrequency?: 'monthly' | 'weekly' | 'yearly' | null
+  recurrenceNextDate?: string | null
+  installmentTotal?: number | null
+  installmentCurrent?: number | null
+  installmentAmount?: number | null
+  installmentGroupId?: string | null
+  allowDuplicate?: boolean
+  filename?: string | null
+  rawText?: string | null
 }
 
 /**
- * Process a text-based expense description into a persisted, structured receipt.
+ * Parse an image-based expense/receipt scan into a structured Receipt
+ * without persisting to storage or database. Resolves accounts, recurrence and installments.
  */
-export async function processTextExpense(text: string): Promise<StoredReceipt> {
+export async function parseReceiptImage(
+  buffer: Buffer,
+  contentType: string,
+  options?: ProcessOptions,
+): Promise<{ receipt: Receipt; originalExtractedData: Record<string, any>; sha256: string }> {
+  const { sha256: computeHash } = await import('./storage')
+  const imageHash = computeHash(buffer)
+  const { receipt } = await scanReceipt(buffer, contentType, undefined, {
+    additionalContextText: options?.rawText || undefined,
+  })
+  if (options?.overrideType) {
+    receipt.type = options.overrideType
+  }
+
+  // Se um accountId explícito foi fornecido, use-o
+  if (options?.accountId !== undefined) {
+    receipt.account_id = options.accountId
+  } else if (options?.rawText) {
+    // Tentar resolver account_id a partir do texto complementar (ex: "cartão Inter", "nubank")
+    const { listAccounts } = await import('./queries')
+    const { normalizeInstitutionKey } = await import('./institutions')
+    try {
+      const allAccounts = await listAccounts()
+      const textLower = options.rawText.toLowerCase()
+      const matchedInstKey = normalizeInstitutionKey(textLower)
+
+      const matchedAccount = allAccounts.find((acc) => {
+        const accNameLower = acc.name.toLowerCase()
+        const accInstLower = (acc.institution || '').toLowerCase()
+        if (matchedInstKey && (accNameLower.includes(matchedInstKey) || accInstLower.includes(matchedInstKey))) {
+          return true
+        }
+        return textLower.includes(accNameLower)
+      })
+
+      if (matchedAccount) {
+        receipt.account_id = matchedAccount.id
+        if (matchedAccount.type === 'credit_card' && !receipt.payment_method) {
+          receipt.payment_method = 'Cartão de Crédito'
+        }
+      }
+    } catch {
+      // Silently continue if account resolution fails
+    }
+
+    // Fallback determinístico para reconhecimento de forma de pagamento na legenda da imagem
+    const textLower = options.rawText.toLowerCase()
+    if (!receipt.payment_method) {
+      if (/\b(pix|via pix|no pix|paguei no pix|paguei via pix|chave pix)\b/i.test(textLower)) {
+        receipt.payment_method = 'Pix'
+      } else if (/\b(dinheiro|em esp[eé]cie|em dinheiro|no dinheiro)\b/i.test(textLower)) {
+        receipt.payment_method = 'Dinheiro'
+      } else if (/\b(d[eé]bito|no d[eé]bito|cart[aã]o de d[eé]bito)\b/i.test(textLower)) {
+        receipt.payment_method = 'Cartão de Débito'
+      }
+    }
+  }
+
+  if (options?.isRecurring !== undefined) {
+    const rec = resolveRecurrenceUpdate({
+      is_recurring: options.isRecurring,
+      recurrence_frequency: options.recurrenceFrequency,
+      recurrence_next_date: options.recurrenceNextDate,
+      date: receipt.date,
+    })
+    receipt.is_recurring = rec.is_recurring
+    receipt.recurrence_frequency = rec.recurrence_frequency
+    receipt.recurrence_next_date = rec.recurrence_next_date
+    receipt.recurrence_status = rec.recurrence_status
+  }
+
+  const plan = resolveInstallmentPlan({
+    total: receipt.total || 0,
+    installmentTotal: options?.installmentTotal,
+    installmentCurrent: options?.installmentCurrent,
+    installmentAmount: options?.installmentAmount,
+    installmentGroupId: options?.installmentGroupId,
+    subtotal: receipt.subtotal,
+    notes: receipt.notes,
+    vendor: receipt.vendor,
+    rawText: options?.rawText || null,
+  })
+
+  if (plan.isMultiInstallment) {
+    receipt.installment_total = plan.installmentTotal
+    receipt.installment_current = plan.installmentCurrent
+    receipt.installment_amount = plan.installmentAmount
+    receipt.installment_group_id = plan.installmentGroupId
+    receipt.subtotal = plan.totalPurchaseAmount
+  }
+
+  // Snapshot original extracted data
+  const originalExtractedData = {
+    type: receipt.type,
+    account_id: receipt.account_id,
+    vendor: receipt.vendor,
+    vendor_address: receipt.vendor_address,
+    date: receipt.date,
+    time: receipt.time,
+    currency: receipt.currency,
+    category: receipt.category,
+    subtotal: receipt.subtotal,
+    tax: receipt.tax,
+    tip: receipt.tip,
+    total: receipt.total,
+    payment_method: receipt.payment_method,
+    notes: receipt.notes,
+    items: receipt.items?.map((it) => ({ ...it })),
+  }
+
+  return { receipt, originalExtractedData, sha256: imageHash }
+}
+
+export async function processReceipt(
+  buffer: Buffer,
+  contentType: string,
+  options?: ProcessOptions,
+): Promise<StoredReceipt> {
+  const stored = await store(buffer, contentType)
+  const { receipt, originalExtractedData } = await parseReceiptImage(buffer, contentType, options)
+
+  return save({
+    receipt,
+    imageKey: stored.key,
+    imageSha256: stored.sha256,
+    sourceType: 'image',
+    originType: 'image',
+    originalFilename: options?.filename || null,
+    rawText: options?.rawText || null,
+    capturedAt: new Date().toISOString(),
+    originalExtractedData,
+    allowDuplicate: options?.allowDuplicate,
+  })
+}
+
+/**
+ * Parse a text-based expense or income description into a structured Receipt without persisting to the database.
+ * Resolves accounts, recurrence and installments.
+ */
+export async function parseTextExpense(
+  text: string,
+  options?: ProcessOptions,
+): Promise<{ receipt: Receipt; originalExtractedData: Record<string, any> }> {
   const { receipt } = await scanReceipt(text)
-  return save({ receipt, imageKey: null, imageSha256: null, sourceType: 'text' })
+  if (options?.overrideType) {
+    receipt.type = options.overrideType
+  }
+  if (options?.accountId !== undefined) {
+    receipt.account_id = options.accountId
+  } else if (text) {
+    // Tentar resolver account_id a partir do texto (ex: "cartão Inter", "nubank")
+    const { listAccounts } = await import('./queries')
+    const { normalizeInstitutionKey } = await import('./institutions')
+    try {
+      const allAccounts = await listAccounts()
+      const textLower = text.toLowerCase()
+      const matchedInstKey = normalizeInstitutionKey(textLower)
+
+      const matchedAccount = allAccounts.find((acc) => {
+        const accNameLower = acc.name.toLowerCase()
+        const accInstLower = (acc.institution || '').toLowerCase()
+        if (matchedInstKey && (accNameLower.includes(matchedInstKey) || accInstLower.includes(matchedInstKey))) {
+          return true
+        }
+        return textLower.includes(accNameLower)
+      })
+
+      if (matchedAccount) {
+        receipt.account_id = matchedAccount.id
+        if (matchedAccount.type === 'credit_card' && !receipt.payment_method) {
+          receipt.payment_method = 'Cartão de Crédito'
+        }
+      }
+    } catch {
+      // Silently continue
+    }
+
+    // Fallback determinístico para reconhecimento de Pix caso o modelo retorne nulo
+    const textLower = text.toLowerCase()
+    if (!receipt.payment_method) {
+      if (/\b(pix|via pix|no pix|paguei no pix|paguei via pix|chave pix)\b/i.test(textLower)) {
+        receipt.payment_method = 'Pix'
+      } else if (/\b(dinheiro|em esp[eé]cie|em dinheiro|no dinheiro)\b/i.test(textLower)) {
+        receipt.payment_method = 'Dinheiro'
+      } else if (/\b(d[eé]bito|no d[eé]bito|cart[aã]o de d[eé]bito)\b/i.test(textLower)) {
+        receipt.payment_method = 'Cartão de Débito'
+      }
+    }
+  }
+  if (options?.isRecurring !== undefined) {
+    const rec = resolveRecurrenceUpdate({
+      is_recurring: options.isRecurring,
+      recurrence_frequency: options.recurrenceFrequency,
+      recurrence_next_date: options.recurrenceNextDate,
+      date: receipt.date,
+    })
+    receipt.is_recurring = rec.is_recurring
+    receipt.recurrence_frequency = rec.recurrence_frequency
+    receipt.recurrence_next_date = rec.recurrence_next_date
+    receipt.recurrence_status = rec.recurrence_status
+  }
+
+  const plan = resolveInstallmentPlan({
+    total: receipt.total || 0,
+    installmentTotal: options?.installmentTotal,
+    installmentCurrent: options?.installmentCurrent,
+    installmentAmount: options?.installmentAmount,
+    installmentGroupId: options?.installmentGroupId,
+    subtotal: receipt.subtotal,
+    notes: receipt.notes,
+    rawText: text,
+    vendor: receipt.vendor,
+  })
+
+  if (plan.isMultiInstallment) {
+    receipt.installment_total = plan.installmentTotal
+    receipt.installment_current = plan.installmentCurrent
+    receipt.installment_amount = plan.installmentAmount
+    receipt.installment_group_id = plan.installmentGroupId
+    receipt.subtotal = plan.totalPurchaseAmount
+  }
+
+  // Snapshot original extracted data
+  const originalExtractedData = {
+    type: receipt.type,
+    account_id: receipt.account_id,
+    vendor: receipt.vendor,
+    vendor_address: receipt.vendor_address,
+    date: receipt.date,
+    time: receipt.time,
+    currency: receipt.currency,
+    category: receipt.category,
+    subtotal: receipt.subtotal,
+    tax: receipt.tax,
+    tip: receipt.tip,
+    total: receipt.total,
+    payment_method: receipt.payment_method,
+    notes: receipt.notes,
+    items: receipt.items?.map((it) => ({ ...it })),
+  }
+
+  return { receipt, originalExtractedData }
+}
+
+/**
+ * Process a text-based expense or income description into a persisted, structured receipt.
+ */
+export async function processTextExpense(
+  text: string,
+  options?: ProcessOptions,
+): Promise<StoredReceipt> {
+  const { receipt, originalExtractedData } = await parseTextExpense(text, options)
+
+  return save({
+    receipt,
+    imageKey: null,
+    imageSha256: null,
+    sourceType: 'text',
+    originType: 'text',
+    rawText: text,
+    originalFilename: null,
+    capturedAt: new Date().toISOString(),
+    originalExtractedData,
+    allowDuplicate: options?.allowDuplicate,
+  })
 }
 
 export interface BatchItemResult {
@@ -49,7 +320,7 @@ export async function processBatch(
       const index = cursor++
       const file = files[index]
       try {
-        const receipt = await processReceipt(file.buffer, file.contentType)
+        const receipt = await processReceipt(file.buffer, file.contentType, { filename: file.filename })
         results[index] = { filename: file.filename, ok: true, receipt }
       } catch (e) {
         results[index] = {

@@ -5,6 +5,49 @@ import { z } from 'zod'
  * the UI, an export, or a database. This schema is also handed to the OpenAI model
  * as structured outputs.
  */
+export const accountTypeSchema = z.enum([
+  'bank_account',
+  'cash',
+  'credit_card',
+  'debit_card',
+  'digital_wallet',
+  'other',
+])
+
+export type AccountType = z.infer<typeof accountTypeSchema>
+
+export const accountSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: accountTypeSchema,
+  institution: z.string().nullable().optional(),
+  active: z.boolean().default(true),
+  created_at: z.string().optional(),
+  closing_day: z.number().int().min(1).max(31).nullable().optional(),
+  due_day: z.number().int().min(1).max(31).nullable().optional(),
+  custom_logo: z.string().nullable().optional(),
+  color: z.string().nullable().optional(),
+  skin: z.string().nullable().optional(),
+})
+
+export type Account = z.infer<typeof accountSchema>
+
+export const categorySchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, 'Nome da categoria é obrigatório'),
+  normalized_name: z.string().optional(),
+  type: z.enum(['expense', 'income']),
+  icon: z.string().default('Tag'),
+  color: z.string().default('#2F68FE'),
+  is_system: z.boolean().default(false),
+  active: z.boolean().default(true),
+  sort_order: z.number().default(0),
+  created_at: z.string().optional(),
+  updated_at: z.string().optional(),
+})
+
+export type Category = z.infer<typeof categorySchema>
+
 export const lineItemSchema = z.object({
   description: z.string(),
   quantity: z.number().nullable(),
@@ -14,6 +57,9 @@ export const lineItemSchema = z.object({
 })
 
 export const receiptSchema = z.object({
+  type: z.enum(['expense', 'income']).default('expense'),
+  account_id: z.string().nullable().optional(),
+  category_id: z.string().nullable().optional(),
   vendor: z.string().nullable(),
   vendor_address: z.string().nullable(),
   date: z.string().nullable(),
@@ -27,6 +73,27 @@ export const receiptSchema = z.object({
   total: z.number().nullable(),
   payment_method: z.string().nullable(),
   notes: z.string().nullable(),
+  // Recurrence
+  is_recurring: z.boolean().default(false).optional(),
+  recurrence_frequency: z.enum(['monthly', 'weekly', 'yearly']).nullable().optional(),
+  recurrence_next_date: z.string().nullable().optional(),
+  recurrence_status: z.enum(['active', 'ended']).default('active').optional(),
+  recurrence_parent_id: z.string().nullable().optional(),
+  recurrence_cycle_date: z.string().nullable().optional(),
+  // Installments
+  installment_group_id: z.string().nullable().optional(),
+  installment_current: z.number().nullable().optional(),
+  installment_total: z.number().nullable().optional(),
+  installment_amount: z.number().nullable().optional(),
+  // Review Status
+  review_status: z.enum(['confirmed', 'needs_review']).default('confirmed').optional(),
+  review_reasons: z.array(z.string()).default([]).optional(),
+  // Provenance & Traceability
+  origin_type: z.enum(['text', 'image', 'manual']).default('image').optional(),
+  raw_text: z.string().nullable().optional(),
+  original_filename: z.string().nullable().optional(),
+  captured_at: z.string().optional(),
+  original_extracted_data: z.record(z.any()).nullable().optional(),
 })
 
 export type LineItem = z.infer<typeof lineItemSchema>
@@ -39,9 +106,17 @@ export type Receipt = z.infer<typeof receiptSchema>
  */
 export const storedReceiptSchema = receiptSchema.extend({
   id: z.string(),
+  category_id: z.string().nullable().optional(),
   image_key: z.string().nullable(),
   image_sha256: z.string().nullable(),
   scanned_at: z.string(),
+  origin_type: z.enum(['text', 'image', 'manual']).default('image'),
+  raw_text: z.string().nullable().optional(),
+  original_filename: z.string().nullable().optional(),
+  captured_at: z.string().optional(),
+  original_extracted_data: z.record(z.any()).nullable().optional(),
+  review_status: z.enum(['confirmed', 'needs_review']).default('confirmed'),
+  review_reasons: z.array(z.string()).default([]),
 })
 
 export type StoredReceipt = z.infer<typeof storedReceiptSchema>
@@ -53,12 +128,43 @@ export type StoredReceipt = z.infer<typeof storedReceiptSchema>
  */
 export function normaliseReceipt(input: unknown): Receipt {
   const parsed = receiptSchema.parse(input)
+
   return {
     ...parsed,
+    type: parsed.type === 'income' ? 'income' : 'expense',
+    date: parsed.date ?? null,
+    account_id: parsed.account_id ?? null,
+    category_id: parsed.category_id ?? null,
     category: parsed.category ?? null,
-    items: (parsed.items ?? []).map((item) => ({
-      ...item,
-      category: item.category ?? null,
-    })),
+    is_recurring: parsed.is_recurring ?? false,
+    recurrence_frequency: parsed.recurrence_frequency ?? null,
+    recurrence_next_date: parsed.recurrence_next_date ?? null,
+    recurrence_status: parsed.recurrence_status ?? 'active',
+    recurrence_parent_id: parsed.recurrence_parent_id ?? null,
+    recurrence_cycle_date: parsed.recurrence_cycle_date ?? null,
+    installment_group_id: parsed.installment_group_id ?? null,
+    installment_current: parsed.installment_current ?? null,
+    installment_total: parsed.installment_total ?? null,
+    installment_amount: parsed.installment_amount ?? null,
+    review_status: parsed.review_status ?? 'confirmed',
+    review_reasons: parsed.review_reasons ?? [],
+    items: (parsed.items ?? []).map((item) => {
+      const netTotal = typeof item.total === 'number' ? item.total : null
+      const quantity = typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1
+      
+      // Compute effective_unit_price = net_total / quantity
+      let effectiveUnitPrice: number | null = item.unit_price ?? null
+      if (netTotal !== null && quantity > 0) {
+        effectiveUnitPrice = Number((netTotal / quantity).toFixed(4))
+      }
+
+      return {
+        ...item,
+        quantity,
+        total: netTotal,
+        unit_price: effectiveUnitPrice,
+        category: item.category ?? null,
+      }
+    }),
   }
 }

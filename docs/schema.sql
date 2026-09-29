@@ -1,9 +1,24 @@
 -- Migration: 001_create_transactions_and_items.sql
--- Description: Create transactions and transaction_items tables with optimized indexes for querying expenses.
+-- Description: Create accounts, transactions and transaction_items tables with optimized indexes.
 
--- 1. Transactions table
+-- 1. Accounts table
+create table if not exists accounts (
+  id           uuid primary key default gen_random_uuid(),
+  name         text not null,
+  type         text not null check (type in ('bank_account', 'cash', 'credit_card', 'debit_card', 'digital_wallet', 'other')),
+  institution  text,
+  active       boolean not null default true,
+  created_at   timestamptz not null default now()
+);
+
+-- Indexes for accounts
+create index if not exists idx_accounts_active on accounts (active);
+create index if not exists idx_accounts_type on accounts (type);
+
+-- 2. Transactions table
 create table if not exists transactions (
   id              uuid primary key default gen_random_uuid(),
+  account_id      uuid references accounts (id) on delete set null,
   vendor          text,
   vendor_address  text,
   date            date,
@@ -17,20 +32,23 @@ create table if not exists transactions (
   payment_method  text,
   notes           text,
   source_type     text not null default 'image', -- 'image' or 'text'
+  type            text not null default 'expense' check (type in ('expense', 'income')),
   image_key       text,                          -- optional R2 storage key
   image_sha256    text,                          -- content hash
   created_at      timestamptz not null default now()
 );
 
 -- Indexes for transactions
+create index if not exists idx_transactions_account_id on transactions (account_id);
 create index if not exists idx_transactions_date on transactions (date);
 create index if not exists idx_transactions_vendor on transactions (vendor);
 create index if not exists idx_transactions_category on transactions (category);
 create index if not exists idx_transactions_source_type on transactions (source_type);
+create index if not exists idx_transactions_type on transactions (type);
 create unique index if not exists idx_transactions_image_sha256
   on transactions (image_sha256) where image_sha256 is not null;
 
--- 2. Transaction Items table
+-- 3. Transaction Items table
 create table if not exists transaction_items (
   id              uuid primary key default gen_random_uuid(),
   transaction_id  uuid not null references transactions (id) on delete cascade,

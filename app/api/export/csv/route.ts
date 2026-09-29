@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { receiptSchema } from '@/lib/schema'
 import { receiptsToCsv } from '@/lib/csv'
+import { requireFinancialAuth } from '@/lib/authGuard'
 
 export const runtime = 'nodejs'
 
@@ -20,6 +21,11 @@ const bodySchema = z.object({
  * the items layout preserves the full line-item detail of each receipt.
  */
 export async function POST(req: NextRequest) {
+  const auth = requireFinancialAuth(req)
+  if (!auth.authorized && auth.response) {
+    return auth.response
+  }
+
   let parsed
   try {
     parsed = bodySchema.parse(await req.json())

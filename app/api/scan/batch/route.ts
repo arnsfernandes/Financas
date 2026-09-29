@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processBatch } from '@/lib/pipeline'
+import { requireFinancialAuth } from '@/lib/authGuard'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -12,6 +13,11 @@ const MAX_FILES = 50
  * so the caller can see exactly which receipts succeeded.
  */
 export async function POST(req: NextRequest) {
+  const auth = requireFinancialAuth(req)
+  if (!auth.authorized) {
+    return auth.response!
+  }
+
   try {
     const form = await req.formData()
     const files = form.getAll('file').filter((f): f is File => f instanceof File)

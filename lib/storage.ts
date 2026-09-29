@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 
 /**
  * Original-image storage on Cloudflare R2.
@@ -94,4 +94,18 @@ export async function fetch(
   const res = await s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: key }))
   const bytes = await res.Body!.transformToByteArray()
   return Buffer.from(bytes)
+}
+
+/**
+ * Remove an image from storage by key. Safe no-op if storage is not configured
+ * or key is null/empty.
+ */
+export async function remove(
+  key: string | null | undefined,
+  s3: S3Client | null = isStorageConfigured() ? client() : null,
+): Promise<void> {
+  if (!key || !s3) {
+    return
+  }
+  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }))
 }

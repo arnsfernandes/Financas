@@ -1,5 +1,7 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
+import { TelegramWebAppProvider } from '@/lib/useTelegramWebApp'
 
 export const metadata: Metadata = {
   title: 'Finanças',
@@ -33,13 +35,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className="bg-zinc-950 text-zinc-100">
       <head>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Finanças" />
       </head>
       <body className="min-h-screen bg-zinc-950 antialiased selection:bg-violet-500 selection:text-white">
-        {children}
+        <TelegramWebAppProvider>{children}</TelegramWebAppProvider>
       </body>
     </html>
   )
 }
+
