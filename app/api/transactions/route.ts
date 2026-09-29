@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { listTransactions, type TransactionFilter } from '@/lib/queries'
 import { processPendingRecurrences } from '@/lib/recurrence'
 import { requireFinancialAuth } from '@/lib/authGuard'
+import type { PersistInput } from '@/lib/persist'
 
 import { unstable_noStore as noStore } from 'next/cache'
 
@@ -81,7 +82,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const auth = requireFinancialAuth(req)
   if (!auth.authorized) return auth.response!
-  const { save, DuplicateTransactionError } = await import('@/lib/persist')
+  const { save, saveBatch, DuplicateTransactionError } = await import('@/lib/persist')
   try {
     let file: File | null = null
     let body: any
@@ -91,14 +92,58 @@ export async function POST(req: NextRequest) {
       const uploaded = form.get('file')
       if (uploaded instanceof File) file = uploaded
     } else body = await req.json()
+
     const { receiptSchema } = await import('@/lib/schema')
+    const { validateLaunchCompleteness } = await import('@/lib/textRouter')
+    const { listAccounts } = await import('@/lib/queries')
+    const activeAccounts = await listAccounts({ activeOnly: true })
+
+    // Support batch saving (multiple transactions reviewed on web)
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      const persistInputs: PersistInput[] = []
+      for (const item of body.items) {
+        const parsed = receiptSchema.safeParse({
+          vendor_address: null,
+          currency: 'BRL',
+          subtotal: null,
+          tax: null,
+          tip: null,
+          time: null,
+          notes: null,
+          items: [],
+          ...item.receipt,
+        })
+        if (!parsed.success) {
+          return NextResponse.json({ ok: false, error: 'Dados de um dos lançamentos são inválidos.' }, { status: 400 })
+        }
+        const receipt = { ...parsed.data, installment_group_id: null }
+        const validation = validateLaunchCompleteness(receipt, activeAccounts)
+        if (!validation.isComplete) {
+          return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 })
+        }
+        const sourceType: 'image' | 'text' | 'manual' = item.sourceType === 'image' ? 'image' : item.sourceType === 'text' ? 'text' : 'manual'
+        persistInputs.push({
+          receipt,
+          imageKey: null,
+          imageSha256: null,
+          sourceType,
+          originType: sourceType,
+          rawText: typeof item.rawText === 'string' ? item.rawText : null,
+          originalFilename: null,
+          capturedAt: new Date().toISOString(),
+          originalExtractedData: item.originalExtractedData || null,
+          allowDuplicate: body.allowDuplicate === true || item.allowDuplicate === true,
+        })
+      }
+      const saved = await saveBatch(persistInputs)
+      return NextResponse.json({ ok: true, isBatch: true, count: saved.length, receipts: saved })
+    }
+
     const parsed = receiptSchema.safeParse({ vendor_address: null, currency: 'BRL', subtotal: null,
       tax: null, tip: null, time: null, notes: null, items: [], ...body.receipt })
     if (!parsed.success) return NextResponse.json({ ok: false, error: 'Dados do lançamento inválidos.' }, { status: 400 })
     const receipt = { ...parsed.data, installment_group_id: null }
-    const { validateLaunchCompleteness } = await import('@/lib/textRouter')
-    const { listAccounts } = await import('@/lib/queries')
-    const validation = validateLaunchCompleteness(receipt, await listAccounts({ activeOnly: true }))
+    const validation = validateLaunchCompleteness(receipt, activeAccounts)
     if (!validation.isComplete) return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 })
     if (body.sourceType === 'image' && !file) return NextResponse.json({ ok: false, error: 'Comprovante ausente. Anexe o arquivo antes de salvar.' }, { status: 400 })
     const sourceType = file ? 'image' : body.sourceType === 'text' ? 'text' : 'manual'

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       const installmentCurrent = typeof body.installmentCurrent === 'number' ? body.installmentCurrent : (body.installmentCurrent ? parseInt(body.installmentCurrent, 10) : undefined)
       const installmentAmount = typeof body.installmentAmount === 'number' ? body.installmentAmount : (body.installmentAmount ? parseFloat(body.installmentAmount) : undefined)
 
-      const parsed = await parseTextExpense(body.text, {
+      const processOpts = {
         overrideType,
         accountId,
         isRecurring,
@@ -69,7 +69,56 @@ export async function POST(req: NextRequest) {
         installmentTotal,
         installmentCurrent,
         installmentAmount,
-      })
+      }
+
+      // Try splitting the input into multiple transactions if applicable
+      const { splitTransactionText } = await import('@/lib/intent')
+      let descriptions: string[] = [body.text]
+      try {
+        descriptions = await splitTransactionText(body.text)
+      } catch {
+        // Fall back to single transaction processing
+        descriptions = [body.text]
+      }
+
+      if (descriptions.length > 1) {
+        const items = await Promise.all(
+          descriptions.map(async (desc) => {
+            const parsed = await parseTextExpense(desc, processOpts)
+            const receipt = { ...parsed.receipt }
+            const plan = resolveInstallmentPlan({
+              total: receipt.total || 0,
+              subtotal: receipt.subtotal,
+              installmentTotal: receipt.installment_total,
+              installmentCurrent: receipt.installment_current,
+              installmentAmount: receipt.installment_amount,
+              notes: receipt.notes,
+              vendor: receipt.vendor,
+            })
+            if (plan.isMultiInstallment) {
+              receipt.total = plan.installmentAmount
+              receipt.subtotal = plan.totalPurchaseAmount
+              receipt.installment_amount = plan.installmentAmount
+              receipt.installment_total = plan.installmentTotal
+              receipt.installment_current = plan.installmentCurrent
+            }
+            receipt.installment_group_id = null
+            const validation = validateReceipt(parsed.receipt)
+            receipt.review_status = validation.reviewStatus
+            receipt.review_reasons = validation.reviewReasons
+            return {
+              receipt,
+              originalExtractedData: parsed.originalExtractedData,
+              sourceType: 'text' as const,
+              rawText: desc,
+              originalFilename: null,
+            }
+          })
+        )
+        return NextResponse.json({ ok: true, isBatch: true, items })
+      }
+
+      const parsed = await parseTextExpense(body.text, processOpts)
       return previewResponse(parsed, 'text', body.text)
     }
 

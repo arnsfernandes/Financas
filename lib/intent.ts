@@ -5,12 +5,13 @@ import type { Receipt } from './schema'
 let cachedClient: OpenAI | null = null
 
 function getOpenAIClient(): OpenAI {
+  if (cachedClient) {
+    return cachedClient
+  }
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is not set')
   }
-  if (!cachedClient) {
-    cachedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  }
+  cachedClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
   return cachedClient
 }
 
@@ -364,10 +365,13 @@ export async function splitTransactionText(text: string, client: OpenAI = getOpe
     model: TEXT_MODEL, temperature: 0,
     messages: [
       { role: 'system', content: `Separe lançamentos financeiros independentes usando somente trechos LITERAIS, contínuos e não sobrepostos do texto original, na ordem original, em descriptions. Não reescreva, complete nem repita palavras de outro trecho.
-Cada trecho deve conter somente informações atribuídas àquele lançamento. Nunca herde conta, cartão, forma de pagamento, categoria, valor, data ou qualquer outro campo dos vizinhos. Uma informação no primeiro ou último lançamento NÃO tem escopo global por posição ou por ser repetida em outros itens.
-shared_context deve ser null, salvo quando houver um trecho explicitamente global, marcado por "todos", "todas", "tudo", "ambos", "ambas" ou "cada lançamento". Nesse caso, devolva esse trecho LITERAL completo em shared_context, incluindo o marcador, e exclua-o das descriptions. Não inclua informações locais nesse trecho.
+Cada trecho deve conter somente informações atribuídas àquele lançamento. Nunca herde conta, cartão, forma de pagamento, categoria, valor, data ou qualquer outro campo dos vizinhos.
+shared_context deve ser preenchido quando houver um trecho comum/global aplicável a todos os lançamentos:
+- Explicitamente global marcado por "todos", "todas", "tudo", "ambos", "ambas", "cada lançamento" (ex: "tudo no cartão Inter").
+- Ou um modificador comum final/global de pagamento/conta/cartão aplicável a todos os itens listados (ex: "Google One 23,99; combustível 150; IOF 3,50 no cartão Inter" -> descriptions: ["Google One 23,99", "combustível 150", "IOF 3,50"], shared_context: "no cartão Inter").
+Nesses casos, devolva o trecho LITERAL completo em shared_context e exclua-o das descriptions. Caso contrário, shared_context deve ser null.
 Exemplo: "gastei 45 no mercado no cartão Inter, 80 de gasolina e 32 de farmácia no cartão Inter" -> descriptions: ["gastei 45 no mercado no cartão Inter", "80 de gasolina", "32 de farmácia no cartão Inter"], shared_context: null.
-Exemplo: "45 mercado, 80 gasolina e 32 farmácia, tudo no cartão Inter" -> descriptions: ["45 mercado", "80 gasolina", "32 farmácia"], shared_context: "tudo no cartão Inter".
+Exemplo: "Google One 23,99; combustível 150; IOF 3,50 no cartão Inter" -> descriptions: ["Google One 23,99", "combustível 150", "IOF 3,50"], shared_context: "no cartão Inter".
 Preserve campos ausentes. Produtos de uma mesma compra e parcelas são um único lançamento. Se houver apenas um lançamento, devolva o texto original em descriptions e shared_context null.` },
       { role: 'user', content: text },
     ],
@@ -386,7 +390,7 @@ Preserve campos ausentes. Produtos de uma mesma compra e parcelas são um único
   // inject a neighbour's fields into an otherwise incomplete launch.
   const shared = parsed.shared_context
   if (shared !== null && (typeof shared !== 'string' || !shared.trim() ||
-      !/^(todos|todas|tudo|ambos|ambas|cada lançamento|cada lancamento)\b/i.test(shared))) {
+      !/^(todos|todas|tudo|ambos|ambas|cada lançamento|cada lancamento|no |na |em |via |com |pelo |pela |cart[aã]o|pix|dinheiro|d[eé]bito|cr[eé]dito)\b/i.test(shared.trim()))) {
     throw new Error('Contexto compartilhado sem escopo global explícito.')
   }
   const sharedStart = shared === null ? -1 : text.indexOf(shared)

@@ -18,9 +18,22 @@ it('rejects a model attempt to copy a neighbour’s card into the middle launch'
   }) } }] }))
   await expect(splitTransactionText(text, { chat: { completions: { create } } } as any)).rejects.toThrow('trechos independentes')
 })
-it('rejects a local card phrase mislabeled as global context', async () => {
+it('interprets trailing shared context (e.g. no cartão Inter) across descriptions', async () => {
+  const text = 'Google One 23,99; combustível 150; IOF 3,50 no cartão Inter'
+  const descriptions = ['Google One 23,99', 'combustível 150', 'IOF 3,50']
+  const shared_context = 'no cartão Inter'
+  const create = vi.fn(async () => ({ choices: [{ message: { content: JSON.stringify({ descriptions, shared_context }) } }] }))
+  expect(await splitTransactionText(text, { chat: { completions: { create } } } as any)).toEqual([
+    'Google One 23,99 no cartão Inter',
+    'combustível 150 no cartão Inter',
+    'IOF 3,50 no cartão Inter',
+  ])
+  expect(create).toHaveBeenCalledOnce()
+})
+
+it('rejects an invalid shared context that does not match expected global or payment markers', async () => {
   const create = vi.fn(async () => ({ choices: [{ message: { content: JSON.stringify({
-    descriptions: ['45 mercado', '80 gasolina'], shared_context: 'no cartão Inter',
+    descriptions: ['45 mercado', '80 gasolina'], shared_context: 'banana maçã',
   }) } }] }))
-  await expect(splitTransactionText('45 mercado, 80 gasolina no cartão Inter', { chat: { completions: { create } } } as any)).rejects.toThrow('escopo global')
+  await expect(splitTransactionText('45 mercado, 80 gasolina banana maçã', { chat: { completions: { create } } } as any)).rejects.toThrow('escopo global')
 })

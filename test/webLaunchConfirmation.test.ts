@@ -8,7 +8,10 @@ import { setSupabaseClientForTesting } from '../lib/persist'
 import { detectDuplicateTransaction } from '../lib/duplicate'
 import type { Receipt } from '../lib/schema'
 
-vi.mock('../lib/vision', () => ({ scanReceipt: vi.fn() }))
+vi.mock('../lib/vision', async importOriginal => ({
+  ...await importOriginal<typeof import('../lib/vision')>(),
+  scanReceipt: vi.fn(),
+}))
 vi.mock('../lib/storage', async original => ({
   ...await original<typeof import('../lib/storage')>(),
   store: vi.fn(async () => ({ key: 'receipts/test.jpg', sha256: 'test-hash' })),
@@ -141,6 +144,182 @@ describe('web interpretation → review → explicit confirmation', () => {
     const response = await confirm(jsonRequest('/api/transactions', { receipt: { ...receipt(), type: 'income', account_id: 'checking_acc' } }))
     expect(response.status).toBe(200)
     expect(insertTx).toHaveBeenCalledOnce()
+  })
+
+  it('handles a single purchase with multiple products as 1 transaction with multiple transaction_items', async () => {
+    // Single receipt with 3 items (e.g. Supermarket invoice/receipt)
+    const singleReceiptWithItems: Receipt = {
+      type: 'expense',
+      vendor: 'Supermercado Central',
+      vendor_address: null,
+      date: '2026-09-28',
+      time: '14:30',
+      currency: 'BRL',
+      category: 'Mercado',
+      subtotal: 150,
+      tax: null,
+      tip: null,
+      total: 150,
+      payment_method: 'Cartão de Crédito',
+      account_id: 'card',
+      notes: null,
+      items: [
+        { description: 'Arroz 5kg', quantity: 1, unit_price: 35, total: 35, category: 'Alimentação' },
+        { description: 'Feijão 1kg', quantity: 2, unit_price: 10, total: 20, category: 'Alimentação' },
+        { description: 'Carne Bovina', quantity: 1, unit_price: 95, total: 95, category: 'Açougue' },
+      ],
+    }
+
+    vi.mocked(scanReceipt).mockResolvedValueOnce({
+      receipt: singleReceiptWithItems,
+      model: 'test',
+      usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+    })
+
+    const response = await interpret(jsonRequest('/api/scan', { text: 'mercado 150: arroz 35, feijão 20 e carne 95 no cartão' }))
+    expect(response.status).toBe(200)
+    const preview = await response.json()
+    expect(preview.isBatch).toBeUndefined()
+    expect(preview.receipt.total).toBe(150)
+    expect(preview.receipt.items).toHaveLength(3)
+
+    const confirmRes = await confirm(jsonRequest('/api/transactions', {
+      sourceType: 'text',
+      receipt: preview.receipt,
+    }))
+    expect(confirmRes.status).toBe(200)
+    expect(insertTx).toHaveBeenCalledOnce()
+    const txRows = Array.isArray(insertTx.mock.calls[0][0]) ? insertTx.mock.calls[0][0] : [insertTx.mock.calls[0][0]]
+    expect(txRows).toHaveLength(1)
+    expect(txRows[0].total).toBe(150)
+    expect(txRows[0].vendor).toBe('Supermercado Central')
+
+    expect(insertItems).toHaveBeenCalledOnce()
+    const itemRows = Array.isArray(insertItems.mock.calls[0][0]) ? insertItems.mock.calls[0][0] : [insertItems.mock.calls[0][0]]
+    expect(itemRows).toHaveLength(3)
+    expect(itemRows.map((it: any) => it.description)).toEqual(['Arroz 5kg', 'Feijão 1kg', 'Carne Bovina'])
+  })
+
+  it('handles multiple expenses informed together (e.g. Google One, combustível, IOF no cartão Inter) as independent transactions in batch review and confirmation', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key')
+    const { setOpenAIClientForTesting } = await import('../lib/intent')
+    const rawInput = 'Google One 23,99; combustível 150; IOF 3,50 no cartão Inter'
+
+    // Mock splitTransactionText OpenAI call
+    const create = vi.fn(async () => ({
+      choices: [{
+        message: {
+          content: JSON.stringify({
+            descriptions: ['Google One 23,99', 'combustível 150', 'IOF 3,50'],
+            shared_context: 'no cartão Inter',
+          }),
+        },
+      }],
+    }))
+    setOpenAIClientForTesting({ chat: { completions: { create } } } as any)
+
+    // Mock scanReceipt for the 3 separated transactions
+    vi.mocked(scanReceipt)
+      .mockResolvedValueOnce({
+        receipt: {
+          type: 'expense',
+          vendor: 'Google One',
+          vendor_address: null,
+          date: '2026-09-28',
+          time: null,
+          currency: 'BRL',
+          category: 'Assinaturas',
+          subtotal: 23.99,
+          tax: null,
+          tip: null,
+          total: 23.99,
+          payment_method: 'Cartão de Crédito',
+          account_id: 'card',
+          notes: null,
+          items: [],
+        },
+        model: 'test',
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+      })
+      .mockResolvedValueOnce({
+        receipt: {
+          type: 'expense',
+          vendor: 'Combustível',
+          vendor_address: null,
+          date: '2026-09-28',
+          time: null,
+          currency: 'BRL',
+          category: 'Transporte',
+          subtotal: 150,
+          tax: null,
+          tip: null,
+          total: 150,
+          payment_method: 'Cartão de Crédito',
+          account_id: 'card',
+          notes: null,
+          items: [],
+        },
+        model: 'test',
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+      })
+      .mockResolvedValueOnce({
+        receipt: {
+          type: 'expense',
+          vendor: 'IOF',
+          vendor_address: null,
+          date: '2026-09-28',
+          time: null,
+          currency: 'BRL',
+          category: 'Impostos & Tarifas',
+          subtotal: 3.50,
+          tax: null,
+          tip: null,
+          total: 3.50,
+          payment_method: 'Cartão de Crédito',
+          account_id: 'card',
+          notes: null,
+          items: [],
+        },
+        model: 'test',
+        usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0 },
+      })
+
+    const scanResponse = await interpret(jsonRequest('/api/scan', { text: rawInput }))
+    expect(scanResponse.status).toBe(200)
+    const scanData = await scanResponse.json()
+    expect(scanData.isBatch).toBe(true)
+    expect(scanData.items).toHaveLength(3)
+    expect(scanData.items[0].receipt.total).toBe(23.99)
+    expect(scanData.items[0].receipt.vendor).toBe('Google One')
+    expect(scanData.items[0].receipt.category).toBe('Assinaturas')
+
+    expect(scanData.items[1].receipt.total).toBe(150)
+    expect(scanData.items[1].receipt.vendor).toBe('Combustível')
+    expect(scanData.items[1].receipt.category).toBe('Transporte')
+
+    expect(scanData.items[2].receipt.total).toBe(3.5)
+    expect(scanData.items[2].receipt.vendor).toBe('IOF')
+    expect(scanData.items[2].receipt.category).toBe('Impostos & Tarifas')
+
+    // Confirm the batch through POST /api/transactions
+    const confirmResponse = await confirm(jsonRequest('/api/transactions', {
+      items: scanData.items,
+    }))
+    expect(confirmResponse.status).toBe(200)
+    const confirmData = await confirmResponse.json()
+    expect(confirmData.isBatch).toBe(true)
+    expect(confirmData.count).toBe(3)
+
+    expect(insertTx).toHaveBeenCalledOnce()
+    const rows = Array.isArray(insertTx.mock.calls[0][0]) ? insertTx.mock.calls[0][0] : [insertTx.mock.calls[0][0]]
+    expect(rows).toHaveLength(3)
+    expect(rows.map((r: any) => ({ total: r.total, vendor: r.vendor, category: r.category }))).toEqual([
+      { total: 23.99, vendor: 'Google One', category: 'Assinaturas' },
+      { total: 150, vendor: 'Combustível', category: 'Transporte' },
+      { total: 3.50, vendor: 'IOF', category: 'Impostos & Tarifas' },
+    ])
+    expect(rows.every((r: any) => r.payment_method === 'Cartão de Crédito' && r.account_id === 'card')).toBe(true)
+    setOpenAIClientForTesting(null)
   })
 })
 
