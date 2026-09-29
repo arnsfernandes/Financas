@@ -250,13 +250,14 @@ export function generateInstallmentDates(
   baseDate: string,
   totalInstallments: number,
   currentInstallment: number = 1,
-  anchor: InstallmentDateAnchor = 'purchase_date'
+  anchor: InstallmentDateAnchor | null = 'purchase_date'
 ): { installmentCurrent: number; date: string }[] {
   const result: { installmentCurrent: number; date: string }[] = []
 
-  const purchaseDate = anchor === 'purchase_date'
-    ? baseDate
-    : addMonthsToDate(baseDate, -(currentInstallment - 1))
+  // Only an explicit current-installment anchor may move the date backward.
+  const purchaseDate = anchor === 'current_installment'
+    ? addMonthsToDate(baseDate, -(currentInstallment - 1))
+    : baseDate
 
   for (let i = 1; i <= totalInstallments; i++) {
     result.push({

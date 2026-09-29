@@ -147,7 +147,7 @@ export function normaliseReceipt(input: unknown): Receipt {
     installment_current: parsed.installment_current ?? null,
     installment_total: parsed.installment_total ?? null,
     installment_amount: parsed.installment_amount ?? null,
-    installment_date_anchor: parsed.installment_date_anchor ?? null,
+    installment_date_anchor: parsed.installment_date_anchor ?? 'purchase_date',
     review_status: parsed.review_status ?? 'confirmed',
     review_reasons: parsed.review_reasons ?? [],
     items: (parsed.items ?? []).map((item) => {

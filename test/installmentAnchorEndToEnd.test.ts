@@ -6,6 +6,58 @@ import { save, setSupabaseClientForTesting } from '../lib/persist'
 import { POST as txPOST } from '../app/api/transactions/route'
 import type { Account, Category, Receipt } from '../lib/schema'
 
+// Exercise the actual component's controls and save handler without a browser or
+// network. Only React's hook storage is simulated; payload assembly is production code.
+const formHarness = vi.hoisted(() => ({ slots: [] as any[], cursor: 0, fetch: vi.fn() }))
+vi.mock('react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react')>()
+  return {
+    ...actual,
+    useState: (initial: any) => {
+      const index = formHarness.cursor++
+      if (!(index in formHarness.slots)) {
+        formHarness.slots[index] = typeof initial === 'function' ? initial() : initial
+      }
+      return [formHarness.slots[index], (value: any) => {
+        formHarness.slots[index] = typeof value === 'function' ? value(formHarness.slots[index]) : value
+      }]
+    },
+    useRef: (initial: any) => {
+      const index = formHarness.cursor++
+      return formHarness.slots[index] ??= { current: initial }
+    },
+  }
+})
+vi.mock('../lib/useTelegramWebApp', () => ({
+  useTelegramWebApp: () => ({ fetchWithAuth: formHarness.fetch }),
+}))
+import { NewLaunchTab } from '../components/launch/NewLaunchTab'
+import { AccountSelect } from '../components/accounts/AccountSelect'
+import { receiptSchema, normaliseReceipt } from '../lib/schema'
+
+function nodes(node: any): any[] {
+  if (!node || typeof node !== 'object') return []
+  if (Array.isArray(node)) return node.flatMap(nodes)
+  return [node, ...nodes(node.props?.children)]
+}
+function textContent(node: any): string {
+  if (Array.isArray(node)) return node.map(textContent).join('')
+  if (node && typeof node === 'object') return textContent(node.props?.children)
+  return typeof node === 'string' || typeof node === 'number' ? String(node) : ''
+}
+function renderManualForm() {
+  formHarness.cursor = 0
+  return nodes(NewLaunchTab({ accounts: mockAccounts, initialMode: 'manual' }))
+}
+function control(predicate: (node: any) => boolean) {
+  const found = renderManualForm().find(predicate)
+  expect(found, 'form control must exist').toBeDefined()
+  return found.props
+}
+function button(label: string) {
+  return control(n => n.type === 'button' && textContent(n).includes(label))
+}
+
 const mockAccounts: Account[] = [
   {
     id: 'acc-inter-cc',
@@ -189,6 +241,63 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       ])
 
       expect(timelineFromCurrent).toEqual(timelineFromPurchase)
+    })
+  })
+
+  describe('Real NewLaunchTab manual save handler', () => {
+    beforeEach(() => {
+      formHarness.slots = []
+      formHarness.fetch.mockReset()
+      vi.useFakeTimers()
+    })
+    afterEach(() => vi.useRealTimers())
+
+    it.each([false, true])('saves actual form payload (explicit current anchor: %s)', async (explicitCurrent) => {
+      const change = (predicate: (node: any) => boolean, value: string) =>
+        control(predicate).onChange({ target: { value } })
+      change(n => n.props?.placeholder === '0,00', '111,69')
+      change(n => n.props?.placeholder === 'Ex: Carrefour, Padaria, Uber...', 'Azul')
+      change(n => n.type === 'input' && n.props.type === 'date', '2026-06-21')
+      control(n => n.type === AccountSelect).onChange('acc-inter-cc')
+      change(n => n.type === 'select', 'Cartão de Crédito')
+      button('Compra Parcelada').onClick()
+      change(n => n.type === 'input' && n.props.type === 'number' && n.props.min === '1', '4')
+      change(n => n.type === 'input' && n.props.type === 'number' && n.props.min === '2', '4')
+      if (explicitCurrent) button('Data da parcela atual').onClick()
+      expect(insertedTransactions).toHaveLength(0)
+      expect(formHarness.fetch).not.toHaveBeenCalled()
+
+      let sent: any
+      let apiResponse: any
+      formHarness.fetch.mockImplementation(async (url, request) => {
+        expect(url).toBe('/api/transactions')
+        sent = JSON.parse(request.body)
+        const response = await txPOST(new NextRequest('http://localhost:3000' + url, { ...request, headers: { ...request.headers, host: 'localhost:3000' } }))
+        apiResponse = await response.clone().json()
+        return response
+      })
+      await button('Salvar Lançamento').onClick()
+      expect(formHarness.fetch).toHaveBeenCalledTimes(1)
+      expect(apiResponse, JSON.stringify(apiResponse)).toMatchObject({ ok: true })
+      const expectedAnchor = explicitCurrent ? 'current_installment' : 'purchase_date'
+      expect(sent.receipt.installment_date_anchor).toBe(expectedAnchor)
+      expect(sent.receipt).toMatchObject({ date: '2026-06-21', installment_current: 4, installment_total: 4 })
+      const schemaInput = { vendor_address: null, currency: 'BRL', tax: null, tip: null, ...sent.receipt }
+      expect(receiptSchema.parse(schemaInput).installment_date_anchor).toBe(expectedAnchor)
+      expect(normaliseReceipt(schemaInput).installment_date_anchor).toBe(expectedAnchor)
+      if (!explicitCurrent) {
+        // Legacy/nullable representations of this same form receipt must keep
+        // purchase-date semantics at the normalization and timeline boundaries.
+        for (const anchor of [null, undefined]) {
+          const nullableReceipt = { ...schemaInput, installment_date_anchor: anchor }
+          expect(normaliseReceipt(nullableReceipt).installment_date_anchor).toBe('purchase_date')
+          expect(generateInstallmentDates('2026-06-21', 4, 4, anchor)[0].date).toBe('2026-06-21')
+        }
+      }
+      const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
+      expect(sorted.map(r => [r.installment_current, r.date])).toEqual(explicitCurrent
+        ? [[1, '2026-03-21'], [2, '2026-04-21'], [3, '2026-05-21'], [4, '2026-06-21']]
+        : [[1, '2026-06-21'], [2, '2026-07-21'], [3, '2026-08-21'], [4, '2026-09-21']])
     })
   })
 
