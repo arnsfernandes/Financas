@@ -52,6 +52,7 @@ export async function GET(req: NextRequest) {
       recurrenceStatus,
       isInstallment,
       installmentGroupId,
+      search: searchParams.get('search') || searchParams.get('q') || undefined,
       startDate: searchParams.get('startDate') || searchParams.get('start_date') || undefined,
       endDate: searchParams.get('endDate') || searchParams.get('end_date') || undefined,
       vendor: searchParams.get('vendor') || undefined,

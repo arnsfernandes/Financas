@@ -177,6 +177,8 @@ export default function Home() {
   // Transações State
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
   const [loadingTx, setLoadingTx] = useState(false)
+  const [loadingMoreTx, setLoadingMoreTx] = useState(false)
+  const [hasMoreTx, setHasMoreTx] = useState(false)
   const [txError, setTxError] = useState('')
   const [selectedDrawerTx, setSelectedDrawerTx] = useState<TransactionRecord | null>(null)
 
@@ -191,24 +193,35 @@ export default function Home() {
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('')
 
   // Carregar transações
-  async function fetchTransactions(customFilters?: {
-    type?: 'all' | 'expense' | 'income'
-    reviewStatus?: 'all' | 'needs_review' | 'confirmed'
-    accountId?: string
-    paymentMethod?: string
-    recurringFilter?: 'all' | 'recurring' | 'installment'
-    isRecurring?: boolean
-    isInstallment?: boolean
-    startDate?: string
-    endDate?: string
-    vendor?: string
-    category?: string
-  }) {
-    setLoadingTx(true)
+  async function fetchTransactions(
+    customFilters?: {
+      type?: 'all' | 'expense' | 'income'
+      reviewStatus?: 'all' | 'needs_review' | 'confirmed'
+      accountId?: string
+      paymentMethod?: string
+      recurringFilter?: 'all' | 'recurring' | 'installment'
+      isRecurring?: boolean
+      isInstallment?: boolean
+      startDate?: string
+      endDate?: string
+      vendor?: string
+      category?: string
+      search?: string
+    },
+    isLoadMore = false
+  ) {
+    if (isLoadMore) {
+      setLoadingMoreTx(true)
+    } else {
+      setLoadingTx(true)
+    }
     setTxError('')
     try {
       const params = new URLSearchParams()
       params.append('limit', '50')
+      if (isLoadMore) {
+        params.append('offset', String(transactions.length))
+      }
       const tType = customFilters?.type !== undefined ? customFilters.type : filterType
       const rStatus = customFilters?.reviewStatus
       const aId = customFilters?.accountId !== undefined ? customFilters.accountId : filterAccount
@@ -218,11 +231,13 @@ export default function Home() {
       const vName = customFilters?.vendor !== undefined ? customFilters.vendor : filterVendor
       const cName = customFilters?.category !== undefined ? customFilters.category : filterCategory
       const pMethod = customFilters?.paymentMethod !== undefined ? customFilters.paymentMethod : filterPaymentMethod
+      const sTerm = customFilters?.search !== undefined ? customFilters.search : undefined
 
       if (tType && tType !== 'all') params.append('type', tType)
       if (rStatus && rStatus !== 'all') params.append('reviewStatus', rStatus)
       if (aId) params.append('accountId', aId)
       if (pMethod) params.append('paymentMethod', pMethod)
+      if (sTerm) params.append('search', sTerm)
       if (customFilters?.isRecurring !== undefined) {
         params.append('isRecurring', String(customFilters.isRecurring))
       } else if (rFilter === 'recurring') {
@@ -245,15 +260,34 @@ export default function Home() {
       })
       const data = await res.json()
       if (data.ok) {
-        setTransactions(data.transactions || [])
+        const fetched = data.transactions || []
+        if (isLoadMore) {
+          setTransactions((prev) => {
+            const existingIds = new Set(prev.map((t) => t.id))
+            const uniqueNew = fetched.filter((t: TransactionRecord) => !existingIds.has(t.id))
+            return [...prev, ...uniqueNew]
+          })
+        } else {
+          setTransactions(fetched)
+        }
+        setHasMoreTx(Boolean(data.has_more))
       } else {
         setTxError(data.error || 'Erro ao carregar transações')
       }
     } catch {
       setTxError('Erro de conexão ao carregar transações')
     } finally {
-      setLoadingTx(false)
+      if (isLoadMore) {
+        setLoadingMoreTx(false)
+      } else {
+        setLoadingTx(false)
+      }
     }
+  }
+
+  async function loadMoreTransactions() {
+    if (loadingMoreTx || !hasMoreTx) return
+    await fetchTransactions(undefined, true)
   }
 
   // Excluir transação
@@ -411,6 +445,9 @@ export default function Home() {
           <TransactionsTab
             transactions={transactions}
             loadingTx={loadingTx}
+            loadingMoreTx={loadingMoreTx}
+            hasMoreTx={hasMoreTx}
+            loadMoreTransactions={loadMoreTransactions}
             txError={txError}
             accounts={accounts}
             selectedDrawerTx={selectedDrawerTx}

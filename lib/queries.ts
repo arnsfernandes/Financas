@@ -256,6 +256,7 @@ export interface TransactionFilter {
   category?: string
   product?: string
   itemCategory?: string
+  search?: string
   limit?: number
   offset?: number
 }
@@ -718,6 +719,7 @@ export async function listTransactions(filters: TransactionFilter = {}) {
       transactions: [],
       total_count: 0,
       total_amount: 0,
+      has_more: false,
     }
   }
 
@@ -762,6 +764,7 @@ export async function listTransactions(filters: TransactionFilter = {}) {
         transactions: [],
         total_count: 0,
         total_amount: 0,
+        has_more: false,
       }
     }
   }
@@ -872,18 +875,70 @@ export async function listTransactions(filters: TransactionFilter = {}) {
     query = query.ilike('category', `%${term}%`)
   }
 
+  // Global search across vendor, category, notes, canonical vendors and items
+  if (filters.search && filters.search.trim()) {
+    const rawSearch = filters.search.trim()
+    const norm = normalizeItemName(rawSearch)
+
+    try {
+      const { parseProductDescription } = await import('./canonical')
+      const parsed = parseProductDescription(rawSearch)
+
+      const { data: matchedProducts } = await supabase
+        .from('canonical_products')
+        .select('id')
+        .or(`normalized_key.ilike.%${parsed.normalizedKey}%,canonical_name.ilike.%${rawSearch}%,brand.ilike.%${rawSearch}%`)
+
+      const matchedProductIds = (matchedProducts || []).map((cp: any) => cp.id)
+
+      let searchItemQuery = supabase.from('transaction_items').select('transaction_id')
+      if (matchedProductIds.length > 0) {
+        searchItemQuery = searchItemQuery.or(`product_id.in.(${matchedProductIds.join(',')}),normalized_name.ilike.%${norm}%,description.ilike.%${rawSearch}%,category.ilike.%${rawSearch}%`)
+      } else {
+        searchItemQuery = searchItemQuery.or(`normalized_name.ilike.%${norm}%,description.ilike.%${rawSearch}%,category.ilike.%${rawSearch}%`)
+      }
+
+      const { data: searchItemMatches } = await searchItemQuery
+      const searchItemTxIds = Array.from(new Set((searchItemMatches || []).map((r: any) => r.transaction_id)))
+
+      const { cleanVendorText } = await import('./canonicalVendor')
+      const cleanSearch = cleanVendorText(rawSearch)
+      const { data: matchedVendors } = await supabase
+        .from('canonical_vendors')
+        .select('id')
+        .or(`normalized_key.ilike.%${cleanSearch}%,canonical_name.ilike.%${rawSearch}%,aliases.cs.{${cleanSearch}}`)
+      const matchedVendorIds = (matchedVendors || []).map((cv: any) => cv.id)
+
+      const searchConditions = [
+        `vendor.ilike.%${rawSearch}%`,
+        `category.ilike.%${rawSearch}%`,
+        `notes.ilike.%${rawSearch}%`,
+      ]
+      if (matchedVendorIds.length > 0) {
+        searchConditions.push(`vendor_id.in.(${matchedVendorIds.join(',')})`)
+      }
+      if (searchItemTxIds.length > 0) {
+        searchConditions.push(`id.in.(${searchItemTxIds.join(',')})`)
+      }
+
+      query = query.or(searchConditions.join(','))
+    } catch (searchErr) {
+      console.warn('Error applying search filter:', searchErr)
+      query = query.or(`vendor.ilike.%${rawSearch}%,category.ilike.%${rawSearch}%,notes.ilike.%${rawSearch}%`)
+    }
+  }
+
   // Effective date filtering (date OR created_at)
   const dateOrFilter = buildEffectiveDateOrFilter(filters.startDate, filters.endDate)
   if (dateOrFilter) {
     query = query.or(dateOrFilter)
   }
 
-  if (filters.limit) {
+  if (filters.offset !== undefined) {
+    const lim = filters.limit || 50
+    query = query.range(filters.offset, filters.offset + lim - 1)
+  } else if (filters.limit) {
     query = query.limit(filters.limit)
-  }
-
-  if (filters.offset) {
-    query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1)
   }
 
   const { data, count, error } = await query
@@ -918,11 +973,15 @@ export async function listTransactions(filters: TransactionFilter = {}) {
     }
   })
   const totalAmount = transactions.reduce((sum, tx) => sum + (Number(tx.total) || 0), 0)
+  const totalCount = count ?? transactions.length
+  const offset = filters.offset ?? 0
+  const hasMore = offset + transactions.length < totalCount
 
   return {
     transactions,
-    total_count: count ?? transactions.length,
+    total_count: totalCount,
     total_amount: Number(totalAmount.toFixed(2)),
+    has_more: hasMore,
   }
 }
 

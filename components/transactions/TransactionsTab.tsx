@@ -111,6 +111,9 @@ export type DisplayListItem =
 export interface TransactionsTabProps {
   transactions: TransactionRecord[]
   loadingTx: boolean
+  loadingMoreTx?: boolean
+  hasMoreTx?: boolean
+  loadMoreTransactions?: () => Promise<void>
   txError?: string
   accounts: Account[]
   // Drawer compartilhado (usado por Transactions e Reports)
@@ -144,6 +147,7 @@ export interface TransactionsTabProps {
     endDate?: string
     vendor?: string
     category?: string
+    search?: string
   }) => Promise<void>
   onDeleteTransaction: (id: string, vendor?: string | null) => Promise<void>
   onTransactionUpdated: (updatedTx: TransactionRecord) => void
@@ -153,6 +157,9 @@ export interface TransactionsTabProps {
 export function TransactionsTab({
   transactions,
   loadingTx,
+  loadingMoreTx = false,
+  hasMoreTx = false,
+  loadMoreTransactions,
   txError,
   accounts,
   selectedDrawerTx,
@@ -182,6 +189,27 @@ export function TransactionsTab({
 
   // Filtros e busca textual
   const [txSearchText, setTxSearchText] = useState('')
+  const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
+  const isInitialMount = React.useRef(true)
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchTransactions({ search: txSearchText.trim() || undefined })
+    }, 350)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [txSearchText])
 
   // Lista de categorias para o filtro
   const [categoriesList, setCategoriesList] = useState<{ id: string; name: string }[]>([])
@@ -218,11 +246,15 @@ export function TransactionsTab({
         const gId = tx.installment_group_id
         if (groupsMap.has(gId)) {
           const group = groupsMap.get(gId)!
-          group.installments.push(tx)
+          if (!group.installments.some((inst) => inst.id === tx.id)) {
+            group.installments.push(tx)
+          }
         } else {
           const totalInst = tx.installment_total || 1
           const instAmount = Number(tx.installment_amount) || Number(tx.total)
-          const totalPurchaseAmount = tx.installment_amount
+          const totalPurchaseAmount = tx.subtotal
+            ? Number(tx.subtotal)
+            : tx.installment_amount
             ? Number(tx.installment_amount) * totalInst
             : Number(tx.total) * totalInst
 
@@ -453,10 +485,10 @@ export function TransactionsTab({
         </div>
         <div className="flex items-center gap-2.5">
           <span className="text-xs text-[#6B7280] font-medium">
-            {filteredDisplayItems.length} registro{filteredDisplayItems.length !== 1 ? 's' : ''}
+            {filteredDisplayItems.length} lançamento{filteredDisplayItems.length !== 1 ? 's' : ''}
           </span>
           <button
-            onClick={() => fetchTransactions()}
+            onClick={() => fetchTransactions({ search: txSearchText.trim() || undefined })}
             disabled={loadingTx}
             className="p-2 rounded-xl border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827] hover:border-[#D1D5DB] transition-all disabled:opacity-40 shadow-2xs cursor-pointer"
             title="Atualizar lista"
@@ -479,7 +511,8 @@ export function TransactionsTab({
               onChange={(e) => setTxSearchText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  fetchTransactions({ vendor: txSearchText.trim() || undefined })
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+                  fetchTransactions({ search: txSearchText.trim() || undefined })
                 }
               }}
               placeholder="Buscar por estabelecimento, categoria ou descrição..."
@@ -489,7 +522,8 @@ export function TransactionsTab({
               <button
                 onClick={() => {
                   setTxSearchText('')
-                  fetchTransactions({ vendor: undefined })
+                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+                  fetchTransactions({ search: undefined })
                 }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#111827] p-1"
               >
@@ -822,6 +856,27 @@ export function TransactionsTab({
               )
             })}
           </div>
+        </div>
+      )}
+
+      {/* Botão de Carregamento Incremental */}
+      {hasMoreTx && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={() => loadMoreTransactions && loadMoreTransactions()}
+            disabled={loadingMoreTx}
+            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-[#E5E7EB] hover:border-[#D1D5DB] text-sm font-semibold text-[#374151] hover:text-[#111827] rounded-xl transition-all shadow-2xs hover:shadow-xs disabled:opacity-50 cursor-pointer"
+          >
+            {loadingMoreTx ? (
+              <>
+                <span className="w-4 h-4 border-2 border-[#6B7280] border-t-transparent rounded-full animate-spin" />
+                <span>Carregando mais...</span>
+              </>
+            ) : (
+              <span>Carregar mais lançamentos</span>
+            )}
+          </button>
         </div>
       )}
 

@@ -36,7 +36,7 @@ describe('Queries & Reports with filters', () => {
   it('handles empty database / client gracefully in listTransactions', async () => {
     vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue(null)
     const res = await listTransactions({ vendor: 'Carrefour', startDate: '2026-09-01' })
-    expect(res).toEqual({ transactions: [], total_count: 0, total_amount: 0 })
+    expect(res).toEqual({ transactions: [], total_count: 0, total_amount: 0, has_more: false })
   })
 
 
@@ -1157,6 +1157,93 @@ describe('Queries & Reports with filters', () => {
       expect(arroz1.brand).toBe('Tio João')
       expect(arroz1.unitSize).toBe('1kg')
     })
+  })
 
+  describe('Transactions Pagination & Global Search Suite', () => {
+    it('calculates has_more correctly for pagination with offset and limit', async () => {
+      const mockRows = Array.from({ length: 50 }, (_, i) => ({
+        id: `tx-${i}`,
+        vendor: `Store ${i}`,
+        total: 10,
+        type: 'expense',
+      }))
+
+      const selectMock = vi.fn().mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          range: vi.fn().mockResolvedValue({
+            data: mockRows,
+            count: 123,
+            error: null,
+          }),
+        }),
+      })
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: (table: string) => {
+          if (table === 'transactions') return { select: selectMock }
+          if (table === 'categories') return { select: vi.fn().mockResolvedValue({ data: [], error: null }) }
+          return { select: vi.fn().mockResolvedValue({ data: [], error: null }) }
+        },
+      } as any)
+
+      // Page 1: offset=0, limit=50 of 123 -> has_more=true
+      const page1 = await listTransactions({ offset: 0, limit: 50 })
+      expect(page1.transactions).toHaveLength(50)
+      expect(page1.total_count).toBe(123)
+      expect(page1.has_more).toBe(true)
+
+      // Page 3: offset=100, limit=50 with 23 rows returned -> has_more=false
+      selectMock.mockReturnValue({
+        order: vi.fn().mockReturnValue({
+          range: vi.fn().mockResolvedValue({
+            data: mockRows.slice(0, 23),
+            count: 123,
+            error: null,
+          }),
+        }),
+      })
+
+      const page3 = await listTransactions({ offset: 100, limit: 50 })
+      expect(page3.transactions).toHaveLength(23)
+      expect(page3.total_count).toBe(123)
+      expect(page3.has_more).toBe(false)
+    })
+
+    it('executes global search across vendor, category, notes, canonical vendor and items', async () => {
+      const orMock = vi.fn().mockResolvedValue({
+        data: [
+          { id: 'tx-match-1', vendor: 'Supermercado Dia', total: 55, category: 'Mercado', type: 'expense' },
+        ],
+        count: 1,
+        error: null,
+      })
+
+      const queryChain = {
+        order: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        range: vi.fn().mockReturnThis(),
+        or: orMock,
+      }
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: (table: string) => {
+          if (table === 'transactions') return { select: vi.fn().mockReturnValue(queryChain) }
+          if (table === 'canonical_products') return { select: vi.fn().mockReturnValue({ or: vi.fn().mockResolvedValue({ data: [], error: null }) }) }
+          if (table === 'transaction_items') return { select: vi.fn().mockReturnValue({ or: vi.fn().mockResolvedValue({ data: [], error: null }) }) }
+          if (table === 'canonical_vendors') return { select: vi.fn().mockReturnValue({ or: vi.fn().mockResolvedValue({ data: [], error: null }) }) }
+          if (table === 'categories') return { select: vi.fn().mockResolvedValue({ data: [], error: null }) }
+          return { select: vi.fn().mockResolvedValue({ data: [], error: null }) }
+        },
+      } as any)
+
+      const searchRes = await listTransactions({ search: 'Supermercado' })
+      expect(searchRes.transactions).toHaveLength(1)
+      expect(searchRes.transactions[0].vendor).toBe('Supermercado Dia')
+      expect(orMock).toHaveBeenCalled()
+      const searchConditionArg = orMock.mock.calls[0][0]
+      expect(searchConditionArg).toContain('vendor.ilike.%Supermercado%')
+      expect(searchConditionArg).toContain('category.ilike.%Supermercado%')
+      expect(searchConditionArg).toContain('notes.ilike.%Supermercado%')
+    })
   })
 })
