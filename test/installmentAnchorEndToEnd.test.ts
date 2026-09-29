@@ -252,7 +252,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
     })
     afterEach(() => vi.useRealTimers())
 
-    it.each([false, true])('saves actual form payload (explicit current anchor: %s)', async (explicitCurrent) => {
+    it('saves actual manual form payload with canonical purchase date anchor (never moving backward)', async () => {
       const change = (predicate: (node: any) => boolean, value: string) =>
         control(predicate).onChange({ target: { value } })
       change(n => n.props?.placeholder === '0,00', '111,69')
@@ -263,7 +263,6 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       button('Compra Parcelada').onClick()
       change(n => n.type === 'input' && n.props.type === 'number' && n.props.min === '1', '4')
       change(n => n.type === 'input' && n.props.type === 'number' && n.props.min === '2', '4')
-      if (explicitCurrent) button('Data da parcela atual').onClick()
       expect(insertedTransactions).toHaveLength(0)
       expect(formHarness.fetch).not.toHaveBeenCalled()
 
@@ -279,25 +278,18 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       await button('Salvar Lançamento').onClick()
       expect(formHarness.fetch).toHaveBeenCalledTimes(1)
       expect(apiResponse, JSON.stringify(apiResponse)).toMatchObject({ ok: true })
-      const expectedAnchor = explicitCurrent ? 'current_installment' : 'purchase_date'
-      expect(sent.receipt.installment_date_anchor).toBe(expectedAnchor)
+      expect(sent.receipt.installment_date_anchor).toBe('purchase_date')
       expect(sent.receipt).toMatchObject({ date: '2026-06-21', installment_current: 4, installment_total: 4 })
       const schemaInput = { vendor_address: null, currency: 'BRL', tax: null, tip: null, ...sent.receipt }
-      expect(receiptSchema.parse(schemaInput).installment_date_anchor).toBe(expectedAnchor)
-      expect(normaliseReceipt(schemaInput).installment_date_anchor).toBe(expectedAnchor)
-      if (!explicitCurrent) {
-        // Legacy/nullable representations of this same form receipt must keep
-        // purchase-date semantics at the normalization and timeline boundaries.
-        for (const anchor of [null, undefined]) {
-          const nullableReceipt = { ...schemaInput, installment_date_anchor: anchor }
-          expect(normaliseReceipt(nullableReceipt).installment_date_anchor).toBe('purchase_date')
-          expect(generateInstallmentDates('2026-06-21', 4, 4, anchor)[0].date).toBe('2026-06-21')
-        }
-      }
+      expect(receiptSchema.parse(schemaInput).installment_date_anchor).toBe('purchase_date')
+      expect(normaliseReceipt(schemaInput).installment_date_anchor).toBe('purchase_date')
       const sorted = [...insertedTransactions].sort((a, b) => a.installment_current - b.installment_current)
-      expect(sorted.map(r => [r.installment_current, r.date])).toEqual(explicitCurrent
-        ? [[1, '2026-03-21'], [2, '2026-04-21'], [3, '2026-05-21'], [4, '2026-06-21']]
-        : [[1, '2026-06-21'], [2, '2026-07-21'], [3, '2026-08-21'], [4, '2026-09-21']])
+      expect(sorted.map(r => [r.installment_current, r.date])).toEqual([
+        [1, '2026-06-21'],
+        [2, '2026-07-21'],
+        [3, '2026-08-21'],
+        [4, '2026-09-21']
+      ])
     })
   })
 

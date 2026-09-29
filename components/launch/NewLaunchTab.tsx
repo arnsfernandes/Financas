@@ -347,12 +347,17 @@ export function NewLaunchTab({
     setLaunchError('')
 
     const parsedTotal = parseFloat(reviewTotal.replace(',', '.'))
+    const isManualFlow = !draft
+    const effectiveAnchor: InstallmentDateAnchor = isManualFlow
+      ? 'purchase_date'
+      : (draft?.receipt?.installment_date_anchor || reviewInstallmentDateAnchor || 'purchase_date')
+
     const plan = resolveInstallmentPlan({
       total: parsedTotal,
       installmentTotal: reviewIsInstallment ? parseInt(reviewInstallmentTotal, 10) || 2 : null,
       installmentCurrent: reviewIsInstallment ? parseInt(reviewInstallmentCurrent, 10) || 1 : null,
       installmentAmount: reviewIsInstallment ? parsedTotal : null,
-      installmentDateAnchor: reviewIsInstallment ? reviewInstallmentDateAnchor : undefined,
+      installmentDateAnchor: reviewIsInstallment ? effectiveAnchor : undefined,
       notes: reviewNotes,
       vendor: reviewVendor,
       rawText: draft?.rawText || null,
@@ -1456,41 +1461,11 @@ export function NewLaunchTab({
                         />
                       </div>
                     </div>
-                    {/* Âncora da Data */}
-                    {parseInt(reviewInstallmentCurrent, 10) > 1 && (
-                      <div>
-                        <label className="text-[11px] text-[#6B7280] block mb-1">A data informada acima refere-se a:</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setReviewInstallmentDateAnchor('purchase_date')}
-                            className={`px-2.5 py-1.5 rounded-lg border text-left text-[11px] transition-all ${
-                              reviewInstallmentDateAnchor === 'purchase_date'
-                                ? 'bg-blue-50 border-[#2F68FE] text-[#2F68FE] font-medium'
-                                : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
-                            }`}
-                          >
-                            🛒 Data da compra (1ª parcela)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setReviewInstallmentDateAnchor('current_installment')}
-                            className={`px-2.5 py-1.5 rounded-lg border text-left text-[11px] transition-all ${
-                              reviewInstallmentDateAnchor === 'current_installment'
-                                ? 'bg-blue-50 border-[#2F68FE] text-[#2F68FE] font-medium'
-                                : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:border-[#D1D5DB]'
-                            }`}
-                          >
-                            📅 Data da parcela atual ({reviewInstallmentCurrent}/{reviewInstallmentTotal})
-                          </button>
-                        </div>
-                      </div>
-                    )}
                     {/* Linha do Tempo Prevista */}
                     {reviewDate && parseInt(reviewInstallmentTotal, 10) > 1 && (() => {
                       const tot = parseInt(reviewInstallmentTotal, 10) || 2
                       const curr = parseInt(reviewInstallmentCurrent, 10) || 1
-                      const previewDates = generateInstallmentDates(reviewDate, tot, curr, reviewInstallmentDateAnchor)
+                      const previewDates = generateInstallmentDates(reviewDate, tot, curr, 'purchase_date')
                       const firstDate = previewDates[0]?.date
                       const lastDate = previewDates[previewDates.length - 1]?.date
                       const formatPreviewDate = (d?: string) => {
