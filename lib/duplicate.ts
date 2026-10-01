@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Receipt, LineItem } from './schema'
 import { normalizeItemName } from './persist'
+import { formatBRL } from './formatters'
 
 export type DuplicateConfidence = 'exact' | 'probable' | 'none'
 
@@ -242,7 +243,7 @@ export async function detectDuplicateTransaction(
         created_at: cand.created_at,
         items: candItems,
       },
-      reason: `Já existe um lançamento similar de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(newTotal)} em "${cand.vendor}" na data ${cand.date || cand.created_at?.slice(0, 10)}.`,
+      reason: `Já existe um lançamento similar de ${formatBRL(newTotal)} em "${cand.vendor}" na data ${cand.date || cand.created_at?.slice(0, 10)}.`,
     }
   }
 

@@ -124,3 +124,29 @@ export async function PATCH(
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const auth = requireFinancialAuth(req)
+  if (!auth.authorized) {
+    return auth.response!
+  }
+
+  try {
+    const id = params.id
+    if (!id || typeof id !== 'string') {
+      return NextResponse.json({ ok: false, error: 'ID de conta inválido' }, { status: 400 })
+    }
+
+    const { deleteAccount } = await import('@/lib/queries')
+    await deleteAccount(id)
+
+    return NextResponse.json({ ok: true, message: 'Conta ou cartão excluído com sucesso' })
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Falha ao excluir conta'
+    console.error('Error in DELETE /api/accounts/[id]:', e)
+    return NextResponse.json({ ok: false, error: message }, { status: 400 })
+  }
+}

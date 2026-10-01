@@ -122,6 +122,23 @@ export async function parseReceiptImage(
     receipt.subtotal = plan.totalPurchaseAmount
   }
 
+  // Check and apply learned category preference if available
+  try {
+    const { getLearnedCategory } = await import('./categoryLearning')
+    const learned = await getLearnedCategory({
+      vendor: receipt.vendor,
+      transactionType: receipt.type,
+      itemKeyword: receipt.items && receipt.items.length > 0 ? receipt.items[0].description : null,
+      rawText: options?.rawText || null,
+    })
+    if (learned) {
+      receipt.category_id = learned.categoryId
+      receipt.category = learned.categoryName
+    }
+  } catch (err) {
+    console.warn('Could not check learned category preference:', err)
+  }
+
   // Snapshot original extracted data
   const originalExtractedData = {
     type: receipt.type,
@@ -253,6 +270,23 @@ export async function parseTextExpense(
     receipt.installment_group_id = plan.installmentGroupId
     receipt.installment_date_anchor = plan.installmentDateAnchor
     receipt.subtotal = plan.totalPurchaseAmount
+  }
+
+  // Check and apply learned category preference if available
+  try {
+    const { getLearnedCategory } = await import('./categoryLearning')
+    const learned = await getLearnedCategory({
+      vendor: receipt.vendor,
+      transactionType: receipt.type,
+      itemKeyword: receipt.items && receipt.items.length > 0 ? receipt.items[0].description : null,
+      rawText: text || options?.rawText || null,
+    })
+    if (learned) {
+      receipt.category_id = learned.categoryId
+      receipt.category = learned.categoryName
+    }
+  } catch (err) {
+    console.warn('Could not check learned category preference in text expense:', err)
   }
 
   // Snapshot original extracted data

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, useCallback, FormEvent } from 'react'
 import type { Account } from '@/lib/schema'
+import type { DashboardSummary } from '@/lib/queries'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileHeader } from '@/components/layout/MobileHeader'
 import { TelegramMiniAppNav } from '@/components/layout/TelegramMiniAppNav'
@@ -15,6 +16,7 @@ import {
 } from '@/components/transactions/TransactionsTab'
 import { AccountsTab } from '@/components/accounts/AccountsTab'
 import { CategoriesTab } from '@/components/categories/CategoriesTab'
+import { AssistantFloatingWidget } from '@/components/ui/AssistantFloatingWidget'
 
 export type TabType = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'new'
 
@@ -54,7 +56,7 @@ export default function Home() {
   }, [isReady, isTelegram])
 
   // Dashboard / Period State (compartilhado com Contas, Relatórios e Exportação)
-  const [dashboardData, setDashboardData] = useState<any | null>(null)
+  const [dashboardData, setDashboardData] = useState<DashboardSummary | null>(null)
   const [loadingDashboard, setLoadingDashboard] = useState(false)
   const [dashboardError, setDashboardError] = useState('')
   const [periodType, setPeriodType] = useState<'month' | 'year' | 'custom'>('month')
@@ -63,13 +65,13 @@ export default function Home() {
   const [customStartDate, setCustomStartDate] = useState<string>('')
   const [customEndDate, setCustomEndDate] = useState<string>('')
 
-  async function fetchDashboard(
+  const fetchDashboard = useCallback(async (
     overridePeriod?: 'month' | 'year' | 'custom',
     overrideOffset?: number,
     overrideStart?: string,
     overrideEnd?: string,
     overrideAccountId?: string
-  ) {
+  ) => {
     setLoadingDashboard(true)
     setDashboardError('')
     try {
@@ -82,7 +84,11 @@ export default function Home() {
       const params = new URLSearchParams()
       params.append('period', pType)
       params.append('monthOffset', String(mOffset))
-      if (aId) params.append('accountId', aId)
+      if (aId === 'pix') {
+        params.append('paymentMethod', 'PIX')
+      } else if (aId) {
+        params.append('accountId', aId)
+      }
       if (sDate) params.append('startDate', sDate)
       if (eDate) params.append('endDate', eDate)
       params.append('_t', String(Date.now()))
@@ -102,7 +108,7 @@ export default function Home() {
     } finally {
       setLoadingDashboard(false)
     }
-  }
+  }, [fetchWithAuth, periodType, monthOffset, customStartDate, customEndDate, dashboardAccountId])
 
   function handlePeriodTypeChange(newPeriod: 'month' | 'year' | 'custom' | string) {
     const validPeriod = (newPeriod === 'year' || newPeriod === 'custom') ? newPeriod : 'month'
@@ -129,6 +135,7 @@ export default function Home() {
     vendor?: string | null
     category?: string | null
     accountId?: string | null
+    paymentMethod?: string | null
     isRecurring?: boolean
     recurrenceStatus?: 'active' | 'ended'
     isInstallment?: boolean
@@ -138,6 +145,7 @@ export default function Home() {
     if (filters.vendor !== undefined) setFilterVendor(filters.vendor || '')
     if (filters.category !== undefined) setFilterCategory(filters.category || '')
     if (filters.accountId !== undefined) setFilterAccount(filters.accountId || '')
+    if (filters.paymentMethod !== undefined) setFilterPaymentMethod(filters.paymentMethod || '')
     if (filters.isRecurring !== undefined) setFilterRecurring(filters.isRecurring ? 'recurring' : 'all')
     if (filters.isInstallment !== undefined) setFilterRecurring(filters.isInstallment ? 'installment' : 'all')
     setActiveTab('transactions')
@@ -147,6 +155,7 @@ export default function Home() {
       vendor: filters.vendor || undefined,
       category: filters.category || undefined,
       accountId: filters.accountId || undefined,
+      paymentMethod: filters.paymentMethod || undefined,
       isRecurring: filters.isRecurring,
       isInstallment: filters.isInstallment,
     })
@@ -156,7 +165,7 @@ export default function Home() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loadingAccounts, setLoadingAccounts] = useState(false)
 
-  async function fetchAccounts() {
+  const fetchAccounts = useCallback(async () => {
     setLoadingAccounts(true)
     try {
       const res = await fetchWithAuth(`/api/accounts?_t=${Date.now()}`, {
@@ -172,7 +181,7 @@ export default function Home() {
     } finally {
       setLoadingAccounts(false)
     }
-  }
+  }, [fetchWithAuth])
 
   // Transações State
   const [transactions, setTransactions] = useState<TransactionRecord[]>([])
@@ -193,7 +202,7 @@ export default function Home() {
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('')
 
   // Carregar transações
-  async function fetchTransactions(
+  const fetchTransactions = useCallback(async (
     customFilters?: {
       type?: 'all' | 'expense' | 'income'
       reviewStatus?: 'all' | 'needs_review' | 'confirmed'
@@ -209,7 +218,7 @@ export default function Home() {
       search?: string
     },
     isLoadMore = false
-  ) {
+  ) => {
     if (isLoadMore) {
       setLoadingMoreTx(true)
     } else {
@@ -283,7 +292,7 @@ export default function Home() {
         setLoadingTx(false)
       }
     }
-  }
+  }, [fetchWithAuth, filterType, filterAccount, filterRecurring, filterStartDate, filterEndDate, filterVendor, filterCategory, filterPaymentMethod, transactions.length])
 
   async function loadMoreTransactions() {
     if (loadingMoreTx || !hasMoreTx) return
@@ -356,7 +365,7 @@ export default function Home() {
       fetchTransactions()
       fetchAccounts()
     }
-  }, [isReady, isTelegram, isWebAuthenticated])
+  }, [isReady, isTelegram, isWebAuthenticated, fetchDashboard, fetchTransactions, fetchAccounts])
 
   // Estado para inicialização contextual de Novo Lançamento
   const [newLaunchInitialType, setNewLaunchInitialType] = useState<'expense' | 'income'>('expense')
@@ -547,6 +556,9 @@ export default function Home() {
           />
         )}
       </main>
+
+      {/* Assistente Financeiro Flutuante */}
+      <AssistantFloatingWidget />
 
       {/* Telegram Mini App & Mobile Bottom Navigation */}
       <TelegramMiniAppNav

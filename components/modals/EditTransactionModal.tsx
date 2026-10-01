@@ -20,8 +20,7 @@ import {
   Landmark,
   Smartphone,
 } from 'lucide-react'
-import type { Account } from '@/lib/schema'
-import type { TransactionRecord } from '@/components/transactions/TransactionsTab'
+import type { Account, TransactionRecord } from '@/lib/schema'
 import { CategorySelect } from '@/components/categories/CategorySelect'
 import { formatBRL, getAccountTypeLabel, getAccountTypeLucideIcon } from '@/lib/formatters'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
@@ -362,11 +361,11 @@ export function EditTransactionModal({
             </div>
 
             <div>
-              <label className="text-xs text-[#6B7280] font-medium block mb-1">
+              <label className="text-xs text-[#374151] font-semibold block mb-1">
                 Valor Total (R$) <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#9CA3AF]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#6B7280]">
                   R$
                 </span>
                 <input
@@ -386,7 +385,7 @@ export function EditTransactionModal({
 
           {/* 2. ESTABELECIMENTO / FONTE */}
           <div>
-            <label className="text-xs text-[#6B7280] font-medium block mb-1">
+            <label className="text-xs text-[#374151] font-semibold block mb-1">
               {editingTx.type === 'income' ? 'Fonte / Pagador' : 'Estabelecimento'}
             </label>
             <input
@@ -400,7 +399,7 @@ export function EditTransactionModal({
 
           {/* 3. CATEGORIA */}
           <div>
-            <label className="text-xs text-[#6B7280] font-medium block mb-1">Categoria</label>
+            <label className="text-xs text-[#374151] font-semibold block mb-1">Categoria</label>
             <CategorySelect
               type={editingTx.type}
               value={editingTx.category_id}
@@ -414,7 +413,7 @@ export function EditTransactionModal({
 
           {/* 4. UM ÚNICO CAMPO "PAGO COM" (combina Conta + Forma de Pagamento) */}
           <div>
-            <label className="text-xs text-[#6B7280] font-medium block mb-1">Pago com</label>
+            <label className="text-xs text-[#374151] font-semibold block mb-1">Pago com</label>
             <div className="relative">
               <select
                 value={getCombinedPaymentValue()}
@@ -423,18 +422,20 @@ export function EditTransactionModal({
               >
                 <option value="">Não especificado</option>
 
-                {/* Contas Cadastradas */}
-                {localAccounts.length > 0 && (
+                {/* Contas Cadastradas (esconde PIX legado de Conta/Cartão) */}
+                {localAccounts.filter((a) => a.name?.trim().toLowerCase() !== 'pix').length > 0 && (
                   <optgroup label="Contas / Cartões">
-                    {localAccounts.map((acc) => {
-                      const typeLabel = getAccountTypeLabel(acc.type)
-                      const instSuffix = acc.institution ? ` • ${acc.institution}` : ''
-                      return (
-                        <option key={`acc:${acc.id}`} value={`acc:${acc.id}`}>
-                          {acc.name} ({typeLabel}{instSuffix})
-                        </option>
-                      )
-                    })}
+                    {localAccounts
+                      .filter((a) => a.name?.trim().toLowerCase() !== 'pix')
+                      .map((acc) => {
+                        const typeLabel = getAccountTypeLabel(acc.type)
+                        const instSuffix = acc.institution ? ` • ${acc.institution}` : ''
+                        return (
+                          <option key={`acc:${acc.id}`} value={`acc:${acc.id}`}>
+                            {acc.name} ({typeLabel}{instSuffix})
+                          </option>
+                        )
+                      })}
                   </optgroup>
                 )}
 

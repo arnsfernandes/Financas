@@ -3,8 +3,9 @@
  *
  * Handles:
  * 1. Persistent preferences per user (invoices, recurrences, weekly_summary, reminder_hour, timezone)
- *    - Hybrid persistence: Supabase table (if available) + local JSON storage fallback
+ *    - Persisted natively in Supabase table `reminder_preferences` with in-memory sync cache
  * 2. Deduplication and state tracking (sent, dismissed, snoozed, stale_discarded)
+ *    - Persisted natively in Supabase table `reminder_logs`
  * 3. Credit Card Invoices alerts (3 days before and on due date)
  * 4. Recurrence alerts (1 day before next expected date)
  * 5. Weekly summary alerts (Mondays at scheduled hour in America/Sao_Paulo)
@@ -12,7 +13,7 @@
  */
 
 import { listAccounts, listTransactions, getDashboardSummary } from './queries'
-import { getCardInvoiceDates, groupTransactionsIntoInvoices } from './billingCycles'
+import { groupTransactionsIntoInvoices } from './billingCycles'
 import { getSupabaseClient } from './persist'
 import { formatBRL } from './formatters'
 import type { Account } from './schema'
@@ -51,125 +52,16 @@ export interface ReminderNotification {
   buttons?: Array<{ text: string; callbackData: string }>
 }
 
-// In-Memory caches initialized from file/db
+// In-Memory cache
 const memoryPreferences = new Map<number, ReminderPreferences>()
 const memoryLogs = new Map<string, ReminderLogEntry>()
-let isStoreLoaded = false
 
 export function resetReminderStore(): void {
   memoryPreferences.clear()
   memoryLogs.clear()
-  isStoreLoaded = true
-}
-
-async function getFs() {
-  if (typeof window !== 'undefined') return null
-  try {
-    return await import('fs/promises')
-  } catch {
-    return null
-  }
-}
-
-async function getPath() {
-  if (typeof window !== 'undefined') return null
-  try {
-    return await import('path')
-  } catch {
-    return null
-  }
-}
-
-async function getStorageFilePath(): Promise<string | null> {
-  const pathModule = await getPath()
-  if (!pathModule) return null
-  return pathModule.join(process.cwd(), 'data', 'reminders_store.json')
-}
-
-async function ensureDataDir(): Promise<void> {
-  const fsModule = await getFs()
-  const pathModule = await getPath()
-  if (!fsModule || !pathModule) return
-  try {
-    await fsModule.mkdir(pathModule.join(process.cwd(), 'data'), { recursive: true })
-  } catch {
-    // Already exists
-  }
-}
-
-async function loadStore(): Promise<void> {
-  if (isStoreLoaded) return
-  isStoreLoaded = true
-
-  const fsModule = await getFs()
-  const filePath = await getStorageFilePath()
-  if (!fsModule || !filePath) return
-
-  await ensureDataDir()
-  try {
-    const raw = await fsModule.readFile(filePath, 'utf-8')
-    const parsed = JSON.parse(raw)
-
-    if (parsed.preferences && Array.isArray(parsed.preferences)) {
-      for (const p of parsed.preferences) {
-        memoryPreferences.set(p.userId, p)
-      }
-    }
-    if (parsed.logs && Array.isArray(parsed.logs)) {
-      for (const l of parsed.logs) {
-        memoryLogs.set(l.dedupKey, l)
-      }
-    }
-  } catch {
-    // File doesn't exist yet
-  }
-}
-
-async function persistStore(): Promise<void> {
-  const fsModule = await getFs()
-  const filePath = await getStorageFilePath()
-  if (!fsModule || !filePath) return
-
-  await ensureDataDir()
-  try {
-    const data = {
-      preferences: Array.from(memoryPreferences.values()),
-      logs: Array.from(memoryLogs.values()),
-      updatedAt: new Date().toISOString(),
-    }
-    await fsModule.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
-  } catch (err) {
-    console.error('[Reminders Store] Erro ao gravar reminders_store.json:', err)
-  }
 }
 
 export function getPreferences(userId: number): ReminderPreferences {
-  // Sync load if memory empty
-  if (!isStoreLoaded && typeof window === 'undefined') {
-    try {
-      const fs = require('fs')
-      const path = require('path')
-      const filePath = path.join(process.cwd(), 'data', 'reminders_store.json')
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, 'utf-8')
-        const parsed = JSON.parse(raw)
-        if (parsed.preferences && Array.isArray(parsed.preferences)) {
-          for (const p of parsed.preferences) {
-            memoryPreferences.set(p.userId, p)
-          }
-        }
-        if (parsed.logs && Array.isArray(parsed.logs)) {
-          for (const l of parsed.logs) {
-            memoryLogs.set(l.dedupKey, l)
-          }
-        }
-      }
-      isStoreLoaded = true
-    } catch {
-      isStoreLoaded = true
-    }
-  }
-
   const existing = memoryPreferences.get(userId)
   if (existing) return existing
 
@@ -187,7 +79,34 @@ export function getPreferences(userId: number): ReminderPreferences {
     updatedAt: new Date().toISOString(),
   }
   memoryPreferences.set(userId, defaultPref)
-  persistStore().catch(() => {})
+
+  const supabase = getSupabaseClient()
+  if (supabase && typeof supabase.from === 'function') {
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('reminder_preferences')
+          .select('*')
+          .eq('user_id', userId)
+          .single()
+
+        if (!error && data) {
+          memoryPreferences.set(userId, {
+            userId: Number(data.user_id),
+            invoicesEnabled: Boolean(data.invoices_enabled),
+            recurrencesEnabled: Boolean(data.recurrences_enabled),
+            weeklySummaryEnabled: Boolean(data.weekly_summary_enabled),
+            reminderHour: Number(data.reminder_hour) || 9,
+            timezone: data.timezone || 'America/Sao_Paulo',
+            updatedAt: data.updated_at || new Date().toISOString(),
+          })
+        }
+      } catch {
+        // Non-blocking in-memory fallback
+      }
+    })()
+  }
+
   return defaultPref
 }
 
@@ -202,24 +121,25 @@ export function updatePreferences(
     updatedAt: new Date().toISOString(),
   }
   memoryPreferences.set(userId, updated)
-  persistStore().catch(() => {})
 
-  // Also try updating Supabase table if it exists
+  // Persist directly into Supabase
   const supabase = getSupabaseClient()
   if (supabase && typeof supabase.from === 'function') {
     ;(async () => {
       try {
-        await supabase.from('reminder_preferences').upsert({
-          user_id: userId,
-          invoices_enabled: updated.invoicesEnabled,
-          recurrences_enabled: updated.recurrencesEnabled,
-          weekly_summary_enabled: updated.weeklySummaryEnabled,
-          reminder_hour: updated.reminderHour,
-          timezone: updated.timezone,
-          updated_at: updated.updatedAt,
-        })
-      } catch {
-        // Table doesn't exist yet or not pushed; local file store handles it reliably
+        await supabase
+          .from('reminder_preferences')
+          .upsert({
+            user_id: userId,
+            invoices_enabled: updated.invoicesEnabled,
+            recurrences_enabled: updated.recurrencesEnabled,
+            weekly_summary_enabled: updated.weeklySummaryEnabled,
+            reminder_hour: updated.reminderHour,
+            timezone: updated.timezone,
+            updated_at: updated.updatedAt,
+          })
+      } catch (err) {
+        console.error('[Reminders] Error saving preferences to Supabase:', err)
       }
     })()
   }
@@ -228,34 +148,35 @@ export function updatePreferences(
 }
 
 export function getLog(dedupKey: string): ReminderLogEntry | undefined {
-  if (!isStoreLoaded) {
-    getPreferences(0) // Trigger sync initial load
-  }
   return memoryLogs.get(dedupKey)
 }
 
 export function setLog(entry: ReminderLogEntry): void {
   memoryLogs.set(entry.dedupKey, entry)
-  persistStore().catch(() => {})
 
-  // Also try recording into Supabase if table exists
+  // Persist directly into Supabase
   const supabase = getSupabaseClient()
   if (supabase && typeof supabase.from === 'function') {
     ;(async () => {
       try {
-        await supabase.from('reminder_logs').upsert({
-          dedup_key: entry.dedupKey,
-          user_id: entry.userId,
-          type: entry.type,
-          entity_id: entry.entityId || null,
-          target_date: entry.targetDate || null,
-          stage: entry.stage,
-          status: entry.status,
-          sent_at: new Date(entry.timestamp).toISOString(),
-          metadata: entry.metadata || null,
-        })
-      } catch {
-        // Table doesn't exist yet; local file store handles it reliably
+        await supabase
+          .from('reminder_logs')
+          .upsert(
+            {
+              dedup_key: entry.dedupKey,
+              user_id: entry.userId,
+              type: entry.type,
+              entity_id: entry.entityId || null,
+              target_date: entry.targetDate || null,
+              stage: entry.stage,
+              status: entry.status,
+              sent_at: new Date(entry.timestamp).toISOString(),
+              metadata: entry.metadata || null,
+            },
+            { onConflict: 'dedup_key' }
+          )
+      } catch (err) {
+        console.error('[Reminders] Error saving log to Supabase:', err)
       }
     })()
   }

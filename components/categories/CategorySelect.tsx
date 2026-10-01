@@ -87,7 +87,7 @@ export function CategorySelect({
     return () => {
       isMounted = false
     }
-  }, [type])
+  }, [type, fetchWithAuth])
 
   // Click outside to close
   useEffect(() => {
@@ -206,15 +206,15 @@ export function CategorySelect({
               </span>
             </>
           ) : (
-            <span className="text-[#9CA3AF] font-normal truncate">
+            <span className="text-[#6B7280] font-normal truncate">
               {placeholder}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0 text-[#9CA3AF]">
+        <div className="flex items-center gap-1.5 shrink-0 text-[#6B7280]">
           {highlightReview && (
-            <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded">
+            <span className="text-[10px] font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300">
               Revisar
             </span>
           )}

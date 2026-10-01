@@ -1,88 +1,172 @@
-# Architecture
+# Arquitetura do Sistema
 
-Single-process Next.js application. There is no separate worker, queue, or
-database in the default build. The whole pipeline runs server-side, which keeps
-the API key off the client and makes the cost surface easy to reason about.
+Este documento descreve a topologia de arquitetura, camadas da aplicação, fluxo de dados, pipeline de inteligência artificial, autenticação e integração com Telegram Bot.
 
-## Request flow
+---
+
+## 1. Visão Geral da Topologia
+
+A aplicação é construída sobre **Next.js 14 (App Router)** com **TypeScript** e opera como uma aplicação full-stack monolítica moderna hospedada preferencialmente em ambiente serverless (Vercel ou Docker/Node).
 
 ```mermaid
 flowchart TD
-    A[Browser: app/page.tsx] -->|one file or many| B{route}
-    B -->|single| C[app/api/scan]
-    B -->|batch| D[app/api/scan/batch]
-    C --> E[lib/pipeline: processReceipt]
-    D --> F[lib/pipeline: processBatch]
-    F --> E
-    E --> G[lib/storage: R2 put + SHA-256]
-    E --> H[lib/vision: Opus 4.7 structured output]
-    H --> I[lib/schema: Zod validate]
-    E --> J[lib/persist: save]
-    I --> K[StoredReceipt JSON to UI]
-    K --> L[app/api/export/ofx: OFX 1.0.2]
+    subgraph Clients["Clientes"]
+        WebUI["Web App (Desktop / Mobile PWA)"]
+        TelegramUser["Telegram Bot (@FinancasBot)"]
+    end
+
+    subgraph API_Layer["Next.js 14 Server Runtime"]
+        AuthGuard["Auth Guard (Cookie / Bearer / Telegram Secret)"]
+        ScannerRoute["/api/scan & /api/scan/batch"]
+        TransRoutes["/api/transactions & /api/accounts"]
+        ReservesRoutes["/api/reserves"]
+        TelegramRoute["/api/telegram/webhook"]
+        ReminderEngine["Reminder Scheduler & Cron Engine"]
+    end
+
+    subgraph Domain_Services["Camada de Domínio (lib/)"]
+        Pipeline["lib/pipeline.ts (OCR Orchestrator)"]
+        Vision["lib/vision.ts (Gemini 2.5 Flash / Claude)"]
+        TextRouter["lib/textRouter.ts (NLP Router / Heuristics)"]
+        Installments["lib/installments.ts"]
+        BillingCycles["lib/billingCycles.ts"]
+        DuplicateService["lib/duplicate.ts"]
+        ReservesService["lib/reserves.ts"]
+        Queries["lib/queries/ (Account, Category, Dashboard, Tx)"]
+    end
+
+    subgraph Persistence["Armazenamento e Banco"]
+        R2["Cloudflare R2 (Imagens de Comprovantes via S3 SDK)"]
+        Supabase["Supabase PostgreSQL (Tabelas e Índices)"]
+    end
+
+    WebUI -->|HTTP HTTPS + Cookies| AuthGuard
+    TelegramUser -->|Telegram Webhook| TelegramRoute
+    TelegramRoute --> AuthGuard
+
+    AuthGuard --> ScannerRoute
+    AuthGuard --> TransRoutes
+    AuthGuard --> ReservesRoutes
+    AuthGuard --> TelegramRoute
+
+    ScannerRoute --> Pipeline
+    TelegramRoute --> TextRouter
+    ReminderEngine --> BillingCycles
+
+    Pipeline --> Vision
+    Pipeline --> R2
+    Pipeline --> DuplicateService
+    Pipeline --> Queries
+
+    TextRouter --> Vision
+    TextRouter --> Installments
+    TextRouter --> DuplicateService
+    TextRouter --> Queries
+
+    ReservesRoutes --> ReservesService
+    TransRoutes --> Queries
+
+    Queries --> Supabase
+    ReservesService --> Supabase
 ```
 
-The steps, in order:
+---
 
-1. **Upload.** `app/page.tsx` posts one or more files as multipart form data. One file goes to `/api/scan`, several go to `/api/scan/batch`. The browser never holds an API key.
-2. **Store the original.** `lib/storage.ts` writes the image to Cloudflare R2, content-addressed by SHA-256, and returns the key plus hash. When R2 is not configured this is a no-op that still computes the hash, so deduplication and audit hashing work either way.
-3. **Pre-process.** `sharp` corrects EXIF orientation, downscales the long edge to `MAX_IMAGE_PX` (default 2576, matching Opus 4.7 high-resolution vision), and re-encodes to JPEG. This is the biggest cost lever.
-4. **Vision call.** `lib/vision.ts` sends the base64 image to Claude Opus 4.7 with the receipt JSON Schema as a structured-output constraint and a cached system prompt. The model returns valid JSON in the exact shape.
-5. **Validate.** The text is parsed and run through the Zod schema in `lib/schema.ts`. Because the model was already constrained, this is a boundary, not a repair step; a malformed response still cannot reach a database or the UI.
-6. **Persist and respond.** `lib/persist.ts` (a no-op stub by default) returns a complete `StoredReceipt` with id, image key, hash, and timestamp. The UI renders it as a table and can export the set to OFX.
+## 2. Estrutura de Diretórios e Módulos
 
-## Why a strict schema boundary
+```
+receipt-scanner/
+├── app/                        # Next.js 14 App Router
+│   ├── api/                    # Rotas de API HTTP (REST)
+│   │   ├── accounts/           # CRUD de contas bancárias e cartões
+│   │   ├── auth/               # Login, logout e status de sessão web
+│   │   ├── categories/         # Listagem e gestão de categorias
+│   │   ├── dashboard/          # Agregações de métricas e compromissos
+│   │   ├── export/             # Exportações em CSV
+│   │   ├── reserves/           # Gestão de metas de reservas e movimentações
+│   │   ├── scan/               # OCR e ingestão de comprovantes (single & batch)
+│   │   ├── telegram/           # Webhook receptor de mensagens do Bot
+│   │   └── transactions/       # Lançamentos e parcelamentos
+│   ├── layout.tsx              # Shell raiz com viewport e temas
+│   └── page.tsx                # SPA unificada com tabs e drawers
+│
+├── components/                 # Componentes React (Tailwind CSS)
+│   ├── accounts/               # Gestão de cartões, faturas e reservas
+│   ├── dashboard/              # Gráficos, métricas e compromissos
+│   ├── launch/                 # Telas de revisão de notas e novos lançamentos
+│   ├── modals/                 # Modais de edição de transação e formulários
+│   └── transactions/           # Tabela de lançamentos, filtros e paginação
+│
+├── lib/                        # Camada de Domínio, Queries e Serviços
+│   ├── queries/                # Módulos especializados de consulta Supabase
+│   │   ├── accountQueries.ts
+│   │   ├── categoryQueries.ts
+│   │   ├── dashboardQueries.ts
+│   │   └── transactionQueries.ts
+│   ├── accountsMetadata.ts     # Fachada de compatibilidade de contas
+│   ├── authGuard.ts            # Guardião de autenticação de APIs
+│   ├── billingCycles.ts        # Cálculo de cortes e faturas de cartão
+│   ├── canonicalVendor.ts      # Normalização de nomes de lojas
+│   ├── creditCardSkins.ts      # Temas e cores de cartões
+│   ├── duplicate.ts            # Detecção de transações duplicadas
+│   ├── formatters.ts           # Formatadores monetários (BRL) e datas
+│   ├── installments.ts         # Motor matemático de parcelamentos
+│   ├── persist.ts              # Cliente Supabase e persistência transacional
+│   ├── pipeline.ts             # Orquestrador de imagem -> IA -> banco
+│   ├── recurrence.ts           # Projeção de despesas recorrentes
+│   ├── reminders.ts            # Motor de alertas e deduplicação de bot
+│   ├── reserves.ts             # Serviço de reservas financeiras
+│   ├── schema.ts               # Contratos Zod e Tipos TypeScript
+│   ├── textRouter.ts           # Processamento e roteamento de texto do Telegram
+│   └── vision.ts               # Integração com APIs de Visão Computacional
+│
+├── supabase/
+│   └── migrations/             # Migrações SQL versionadas
+└── test/                       # Testes E2E e testes de integração
+```
 
-The schema is the contract. Structured outputs constrain the model to emit it,
-and Zod re-validates on the way in. This is why moving the vision call to a
-different provider requires no changes outside `lib/vision.ts`: the rest of the
-app only ever sees a validated `Receipt`.
+---
 
-The JSON Schema handed to the model in `lib/vision.ts` is written by hand rather
-than derived from the Zod schema, because the SDK's Zod-to-JSON-Schema helper
-requires Zod 4 and the project pins Zod 3. The two must be kept in sync; a field
-added to one must be added to the other. See the Zod 4 tracking issue.
+## 3. Principais Fluxos do Sistema
 
-## Component map
+### 3.1. Ingestão de Comprovante via Imagem (Web ou Telegram)
+1. **Upload / Recebimento:** A imagem é enviada via formulário Web ou enviada como foto no Telegram.
+2. **Armazenamento e Hash:** `lib/storage.ts` gera o hash SHA-256 e envia a imagem bruta para o bucket Cloudflare R2 (se configurado).
+3. **Pré-processamento:** `sharp` redimensiona a imagem para a resolução ideal de OCR (`MAX_IMAGE_PX`), corrigindo rotação EXIF.
+4. **Visão Computacional e IA:** `lib/vision.ts` invoca a API do Gemini ou Claude com o schema estruturado de `Receipt`.
+5. **Validação Zod:** `lib/schema.ts` valida tipagem estrita de cada campo retornado.
+6. **Preflight de Duplicidade:** `lib/duplicate.ts` verifica se a transação já foi lançada recentemente.
+7. **Persistência Atômica:** `lib/persist.ts` grava o cabeçalho em `transactions`, itens em `transaction_items` e resolve o estabelecimento canônico em `canonical_vendors`.
 
-| File | Responsibility |
-|---|---|
-| `app/page.tsx` | Upload UI, parsed tables, OFX export trigger |
-| `app/api/scan/route.ts` | Single-scan endpoint |
-| `app/api/scan/batch/route.ts` | Batch endpoint, up to 50 files, per-file results |
-| `app/api/export/ofx/route.ts` | OFX 1.0.2 statement download |
-| `lib/pipeline.ts` | The one path: store, scan, persist; batch fan-out |
-| `lib/vision.ts` | The single vision call. Opus 4.7, structured output, caching |
-| `lib/schema.ts` | The Zod contract and the `StoredReceipt` type |
-| `lib/storage.ts` | Optional Cloudflare R2 original-image storage |
-| `lib/ofx.ts` | OFX 1.0.2 generation |
-| `lib/persist.ts` | `save()` stub. Replace with your backend |
-| `docs/schema.sql` | Postgres / Supabase tables that mirror the contract |
+### 3.2. Lançamento por Texto Livre no Telegram
+1. Usuário envia: *"Almoço 45,00 no débito Inter"*.
+2. `lib/textRouter.ts` tenta parser heurístico de alta velocidade sem custo de IA.
+3. Se o texto for ambíguo, aciona chamada rápida de IA para extrair parâmetros financeiros estruturados.
+4. Gera botão inline no Telegram para o usuário confirmar o lançamento em 1 clique.
 
-## Batch concurrency
+---
 
-`processBatch` runs a small pool of workers (default four) over the uploaded
-files. Each file is independent: a failure is captured as a per-file error
-rather than failing the request, so one unreadable image never sinks the batch.
-Bounded concurrency keeps the model bill and memory predictable.
+## 4. Segurança e Autenticação
 
-## Failure modes
+1. **Sessão Web:**
+   - Controlada por cookie seguro HTTP-Only (`fin_session`) gerado após autenticação via senha em `/api/auth/login`.
+   - Validada em cada requisição de API por `requireFinancialAuth` em [`lib/authGuard.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/authGuard.ts).
+2. **Telegram Bot:**
+   - Webhook validado via header `x-telegram-bot-api-secret-token`.
+   - Lançamentos e comandos restritos exclusivamente ao ID de usuário configurado em `TELEGRAM_ALLOWED_USER_ID`.
+3. **Banco de Dados (Supabase):**
+   - Políticas de Row Level Security (RLS) configuradas e chaves de serviço (`SERVICE_ROLE_KEY`) restritas exclusivamente às rotas de backend (não expostas no cliente).
 
-- **Image too dark or blurry:** the model returns mostly nulls. Flag low confidence in the UI when most fields are null.
-- **Unsupported currency symbol:** the system prompt maps the common symbols to ISO codes; anything else lands as raw text to normalise downstream.
-- **Hand-written receipts:** hit and miss. Vision reads printed receipts well, scribbled tips less well.
-- **Vision API rate limit:** returns 429. The SDK retries with backoff; add more if you serve many users concurrently.
+---
 
-## Cost reference
+## 5. Fonte de Verdade dos Módulos
 
-A typical phone photo of a UK till receipt at 2576px is one vision request plus
-a small JSON output. Downscaling in step 3 is what keeps it cheap; the cached
-system prompt trims input cost on repeat scans. Higher-resolution input on Opus
-4.7 buys accuracy on small tax-breakdown print at a higher per-image token cost,
-so tune `MAX_IMAGE_PX` to your receipts.
-
-## Deployment topology
-
-Vercel ships `sharp` on the Node runtime, which the scan routes pin. R2 is
-reached over HTTPS with the S3 client. No build configuration is needed beyond
-the environment variables.
+| Funcionalidade | Módulo Central |
+| :--- | :--- |
+| **Contratos e Tipos** | [`lib/schema.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/schema.ts) |
+| **Consultas SQL** | [`lib/queries/`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/queries/) |
+| **Parcelamento** | [`lib/installments.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/installments.ts) |
+| **Ciclos de Fatura** | [`lib/billingCycles.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/billingCycles.ts) |
+| **Reservas** | [`lib/reserves.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/reserves.ts) |
+| **Alertas do Bot** | [`lib/reminders.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/reminders.ts) |
+| **Visão / OCR** | [`lib/vision.ts`](file:///Users/arnaldofernandes/Desktop/receipt-scanner/lib/vision.ts) |

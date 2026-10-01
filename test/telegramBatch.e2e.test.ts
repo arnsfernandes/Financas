@@ -53,7 +53,7 @@ it('routes a Telegram message with three launches through the real handler to on
   vi.spyOn(console, 'log').mockImplementation(() => {})
   const create = vi.fn(async () => ({ choices: [{ message: { content: JSON.stringify({ shared_context: null, descriptions: [
     'gastei 45 no mercado no Inter',
-    '80 de gasolina no Pix',
+    '80 de gasolina no Débito',
     '32 na farmácia no Nubank',
   ] }) } }] }))
   setOpenAIClientForTesting({ chat: { completions: { create } } } as any)
@@ -70,7 +70,7 @@ it('routes a Telegram message with three launches through the real handler to on
   await harness.bot!.handleUpdate({ update_id: 1, message: {
     message_id: 1, date: 0, chat: { id: 42, type: 'private', first_name: 'Test' },
     from: { id: 42, is_bot: false, first_name: 'Test' },
-    text: 'gastei 45 no mercado no Inter, 80 de gasolina no Pix e 32 na farmácia no Nubank',
+    text: 'gastei 45 no mercado no Inter, 80 de gasolina no Débito e 32 na farmácia no Nubank',
   } })
   expect(create).toHaveBeenCalledOnce()
   expect(messages).toHaveLength(1)

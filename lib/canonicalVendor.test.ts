@@ -41,6 +41,32 @@ describe('Canonical Vendors Deterministic Normalization', () => {
       expect(m1.canonicalName).toBe('McDonald\'s')
       expect(m2.canonicalName).toBe('McDonald\'s')
     })
+
+    it('normalizes Mercado Livre and processor variants to Mercado Livre', () => {
+      const variants = [
+        'Mercado Livre',
+        'MERCADO LIVRE',
+        'MercadoLivre',
+        'MERCADOLIVRE*ABC123',
+        'MP * MERCADOLIVRE',
+        'MP*MERCADOLIVRE',
+        'Mercado Pago',
+        'MERCADOPAGO*12345',
+      ]
+
+      for (const variant of variants) {
+        const parsed = parseVendor(variant)
+        expect(parsed.canonicalName).toBe('Mercado Livre')
+        expect(parsed.normalizedKey).toBe('mercado livre')
+      }
+    })
+
+    it('normalizes iFood, Uber and other processor prefixes safely', () => {
+      expect(parseVendor('IFOOD *RESTAURANTE').canonicalName).toBe('Restaurante')
+      expect(parseVendor('UBER *TRIP').canonicalName).toBe('Uber')
+      expect(parseVendor('PAG*PADARIA CENTRAL').canonicalName).toBe('Padaria Central')
+      expect(parseVendor('STONE*DROGARIA PACHECO').canonicalName).toBe('Drogaria Pacheco')
+    })
   })
 
   describe('Separation of Distinct Branches and Locations', () => {

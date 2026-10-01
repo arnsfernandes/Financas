@@ -82,8 +82,9 @@ export function validateLaunchCompleteness(
       pm.includes('dinheiro') ||
       pm.includes('espécie') ||
       pm.includes('especie')
+    const isPix = pm.includes('pix')
 
-    if (!receipt.account_id && !isCash) {
+    if (!receipt.account_id && !isCash && !isPix) {
       return {
         isComplete: false,
         missingField: 'account',

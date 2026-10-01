@@ -81,13 +81,12 @@ describe('TransactionsTab Drawer Render & Deletion Tests', () => {
       />
     )
 
-    // Verification of drawer sections
-    expect(html).toContain('Detalhes do Lançamento')
+    // Verification of modal sections and elements
     expect(html).toContain('Claude')
     expect(html).toContain('Informações Gerais')
     // Verification of action buttons
     expect(html).toContain('Excluir lançamento')
-    expect(html).toContain('Editar Lançamento')
+    expect(html).toContain('Editar lançamento')
     // Verification that backdrop uses high z-index (z-[100]) above bottom nav (z-50)
     expect(html).toContain('z-[100]')
   })

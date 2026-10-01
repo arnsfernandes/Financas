@@ -30,6 +30,7 @@ export async function GET(req: NextRequest) {
     const monthOffsetParam = searchParams.get('monthOffset')
     const monthOffset = monthOffsetParam !== null ? parseInt(monthOffsetParam, 10) : 0
     const accountId = searchParams.get('accountId') || searchParams.get('account') || undefined
+    const paymentMethod = searchParams.get('paymentMethod') || searchParams.get('payment_method') || undefined
     const startDate = searchParams.get('startDate') || undefined
     const endDate = searchParams.get('endDate') || undefined
     const referenceDate = searchParams.get('referenceDate') || undefined
@@ -37,6 +38,7 @@ export async function GET(req: NextRequest) {
     const summary = await getDashboardSummary({
       periodType,
       accountId,
+      paymentMethod,
       monthOffset: isNaN(monthOffset) ? 0 : monthOffset,
       startDate,
       endDate,

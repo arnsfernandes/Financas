@@ -62,7 +62,7 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
   const [modalError, setModalError] = useState('')
 
   // Carregar categorias e estatísticas do período
-  async function fetchCategoriesData() {
+  const fetchCategoriesData = React.useCallback(async () => {
     setLoading(true)
     setError('')
     try {
@@ -114,11 +114,11 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
     } finally {
       setLoading(false)
     }
-  }
+  }, [fetchWithAuth, periodData?.startDate, periodData?.endDate])
 
   useEffect(() => {
     fetchCategoriesData()
-  }, [periodData?.startDate, periodData?.endDate])
+  }, [fetchCategoriesData])
 
   // Abrir modal de criação
   function handleOpenCreate() {
@@ -285,29 +285,29 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
       )}
 
       {/* 2. Barra de Controle: Tabs Tipo, Pesquisa e Switch Inativos */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 border border-[#EBEEF2] rounded-2xl shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 border border-slate-200/80 rounded-2xl shadow-xs">
         {/* Toggle Despesas vs Receitas */}
-        <div className="flex bg-[#F4F5F7] p-1 rounded-xl border border-[#E5E7EB] shrink-0">
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-300/80 shrink-0">
           <button
             onClick={() => setActiveType('expense')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
               activeType === 'expense'
-                ? 'bg-white text-red-600 shadow-xs'
-                : 'text-[#6B7280] hover:text-[#111827]'
+                ? 'bg-white text-rose-700 shadow-2xs border border-slate-200'
+                : 'text-slate-700 hover:text-slate-950 font-semibold'
             }`}
           >
-            <TrendingDown className="w-3.5 h-3.5" />
+            <TrendingDown className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Despesas ({categories.filter((c) => c.type === 'expense' && c.active).length})</span>
           </button>
           <button
             onClick={() => setActiveType('income')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
               activeType === 'income'
-                ? 'bg-white text-emerald-600 shadow-xs'
-                : 'text-[#6B7280] hover:text-[#111827]'
+                ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200'
+                : 'text-slate-700 hover:text-slate-950 font-semibold'
             }`}
           >
-            <TrendingUp className="w-3.5 h-3.5" />
+            <TrendingUp className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Receitas ({categories.filter((c) => c.type === 'income' && c.active).length})</span>
           </button>
         </div>
@@ -315,13 +315,13 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
         {/* Busca e Filtro de Inativas */}
         <div className="flex items-center gap-2 flex-1 max-w-md">
           <div className="relative w-full">
-            <Search className="w-3.5 h-3.5 text-[#9CA3AF] absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar categoria..."
-              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white focus:border-[#2F68FE] rounded-xl pl-9 pr-3 py-1.5 text-xs text-[#111827] placeholder-[#9CA3AF] focus:outline-none transition-all"
+              className="w-full bg-white border border-slate-300 hover:border-slate-400 focus:border-[#2F68FE] rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2F68FE]/20 transition-all shadow-2xs"
             />
             {search && (
               <button
@@ -410,23 +410,23 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                       </span>
 
                       {cat.is_system ? (
-                        <span className="text-[10px] font-medium text-[#6B7280] bg-[#F4F5F7] px-1.5 py-0.2 rounded border border-[#E5E7EB]">
+                        <span className="text-[10px] font-semibold text-[#374151] bg-[#F4F5F7] px-1.5 py-0.2 rounded border border-[#D1D5DB]">
                           Padrão
                         </span>
                       ) : (
-                        <span className="text-[10px] font-medium text-[#2F68FE] bg-[#EBF2FF] px-1.5 py-0.2 rounded border border-[#DDE9FF]">
+                        <span className="text-[10px] font-semibold text-[#1D4ED8] bg-[#EBF2FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
                           Personalizada
                         </span>
                       )}
 
                       {isInactive && (
-                        <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.2 rounded">
+                        <span className="text-[10px] font-bold text-gray-700 bg-gray-200 px-1.5 py-0.2 rounded border border-gray-300">
                           Desativada
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 text-[11px] text-[#6B7280] mt-0.5">
+                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] mt-0.5 font-medium">
                       <span>{cat.txCount || 0} {cat.txCount === 1 ? 'lançamento' : 'lançamentos'}</span>
                       {periodData?.label && <span>no período ({periodData.label})</span>}
                     </div>
@@ -438,12 +438,12 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                   <div className="text-right">
                     <span
                       className={`text-xs sm:text-sm font-bold block ${
-                        cat.type === 'income' ? 'text-[#10B981]' : 'text-[#111827]'
+                        cat.type === 'income' ? 'text-[#059669]' : 'text-[#111827]'
                       }`}
                     >
                       {formatBRL(cat.totalAmount || 0)}
                     </span>
-                    <span className="text-[10px] text-[#9CA3AF]">
+                    <span className="text-[10px] text-[#4B5563] font-medium">
                       {periodData?.label ? 'no período' : 'total'}
                     </span>
                   </div>
@@ -453,7 +453,7 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                     <button
                       type="button"
                       onClick={(e) => handleOpenEdit(cat, e)}
-                      className="p-1.5 rounded-lg text-[#9CA3AF] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors"
+                      className="p-1.5 rounded-lg text-[#6B7280] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors"
                       title="Editar nome, ícone ou cor"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -465,8 +465,8 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                       disabled={cat.is_system && cat.normalized_name === 'outros'}
                       className={`p-1.5 rounded-lg transition-colors ${
                         cat.active
-                          ? 'text-[#9CA3AF] hover:text-amber-600 hover:bg-amber-50'
-                          : 'text-[#9CA3AF] hover:text-emerald-600 hover:bg-emerald-50'
+                          ? 'text-[#6B7280] hover:text-amber-700 hover:bg-amber-50'
+                          : 'text-[#6B7280] hover:text-emerald-700 hover:bg-emerald-50'
                       } ${cat.is_system && cat.normalized_name === 'outros' ? 'opacity-30 cursor-not-allowed' : ''}`}
                       title={
                         cat.is_system && cat.normalized_name === 'outros'

@@ -92,41 +92,41 @@ export function CreditCardItem({
       background: `linear-gradient(135deg, ${accentColor} 0%, color-mix(in srgb, ${accentColor} 70%, #000000) 100%)`,
       backgroundColor: accentColor,
     }
-    borderClass = 'border border-white/15'
+    borderClass = 'border border-white/20'
     textClass = isDarkSkin ? 'text-white' : 'text-[#111827]'
-    subtextClass = isDarkSkin ? 'text-white/75' : 'text-[#111827]/75'
+    subtextClass = isDarkSkin ? 'text-white/90' : 'text-[#111827]/90'
     badgeClass = isDarkSkin
-      ? 'bg-white/20 text-white border-white/25 backdrop-blur-xs'
-      : 'bg-black/15 text-[#111827] border-black/20'
+      ? 'bg-white/25 text-white border-white/30 font-semibold backdrop-blur-xs'
+      : 'bg-black/15 text-[#111827] border-black/25 font-semibold'
     cyclePillClass = isDarkSkin
-      ? 'bg-black/20 text-white/90 border-white/15 backdrop-blur-xs'
-      : 'bg-white/50 text-[#111827] border-black/10'
-    chipClass = isDarkSkin ? 'border-white/30 text-white/50' : 'border-black/25 text-black/40'
+      ? 'bg-black/30 text-white border-white/25 backdrop-blur-xs font-medium'
+      : 'bg-white/70 text-[#111827] border-black/15 font-medium'
+    chipClass = isDarkSkin ? 'border-white/40 text-white/70' : 'border-black/30 text-black/60'
   } else if (activeSkin === 'solid') {
     containerStyle = {
       backgroundColor: accentColor,
     }
-    borderClass = 'border border-black/10'
+    borderClass = 'border border-black/15'
     textClass = isDarkSkin ? 'text-white' : 'text-[#111827]'
-    subtextClass = isDarkSkin ? 'text-white/75' : 'text-[#111827]/75'
+    subtextClass = isDarkSkin ? 'text-white/90' : 'text-[#111827]/90'
     badgeClass = isDarkSkin
-      ? 'bg-white/20 text-white border-white/25 backdrop-blur-xs'
-      : 'bg-black/15 text-[#111827] border-black/20'
+      ? 'bg-white/25 text-white border-white/30 font-semibold backdrop-blur-xs'
+      : 'bg-black/15 text-[#111827] border-black/25 font-semibold'
     cyclePillClass = isDarkSkin
-      ? 'bg-black/20 text-white/90 border-white/15 backdrop-blur-xs'
-      : 'bg-white/50 text-[#111827] border-black/10'
-    chipClass = isDarkSkin ? 'border-white/30 text-white/50' : 'border-black/25 text-black/40'
+      ? 'bg-black/30 text-white border-white/25 backdrop-blur-xs font-medium'
+      : 'bg-white/70 text-[#111827] border-black/15 font-medium'
+    chipClass = isDarkSkin ? 'border-white/40 text-white/70' : 'border-black/30 text-black/60'
   } else if (activeSkin === 'dark') {
     containerStyle = {
       background: `radial-gradient(ellipse 95% 85% at 90% 10%, color-mix(in srgb, ${accentColor} 40%, #0F172A) 0%, #0F172A 70%)`,
       backgroundColor: '#0F172A',
     }
-    borderClass = 'border border-slate-800'
+    borderClass = 'border border-slate-700'
     textClass = 'text-white'
-    subtextClass = 'text-slate-300'
-    badgeClass = 'bg-slate-800/90 text-slate-200 border-slate-700'
-    cyclePillClass = 'bg-slate-950/70 text-slate-300 border-slate-800'
-    chipClass = 'border-slate-700 text-slate-400'
+    subtextClass = 'text-slate-200'
+    badgeClass = 'bg-slate-800 text-white border-slate-600 font-semibold'
+    cyclePillClass = 'bg-slate-900 text-slate-100 border-slate-700 font-medium'
+    chipClass = 'border-slate-600 text-slate-300'
   } else if (activeSkin === 'light') {
     containerStyle = {
       background: `radial-gradient(ellipse 95% 85% at 90% 10%, color-mix(in srgb, ${accentColor} 15%, #FFFFFF) 0%, #FFFFFF 68%)`,
@@ -134,10 +134,10 @@ export function CreditCardItem({
     }
     borderClass = 'border border-[#EBEEF2]'
     textClass = 'text-[#111827]'
-    subtextClass = 'text-[#4B5563]'
-    badgeClass = 'bg-slate-100 text-slate-700 border-slate-200'
-    cyclePillClass = 'bg-slate-50 text-slate-700 border-slate-200/80'
-    chipClass = 'border-slate-300 text-slate-400'
+    subtextClass = 'text-[#374151]'
+    badgeClass = 'bg-slate-100 text-slate-900 border-slate-300 font-semibold'
+    cyclePillClass = 'bg-slate-50 text-slate-900 border-slate-200 font-medium'
+    chipClass = 'border-slate-400 text-slate-600'
   } else {
     // minimal
     containerStyle = {
@@ -145,10 +145,10 @@ export function CreditCardItem({
     }
     borderClass = 'border border-[#E2E8F0]'
     textClass = 'text-[#111827]'
-    subtextClass = 'text-[#4B5563]'
-    badgeClass = 'bg-purple-50 text-purple-700 border-purple-200/60'
-    cyclePillClass = 'bg-slate-50 text-slate-700 border-slate-200/70'
-    chipClass = 'border-slate-300 text-slate-400'
+    subtextClass = 'text-[#374151]'
+    badgeClass = 'bg-purple-50 text-purple-800 border-purple-300 font-semibold'
+    cyclePillClass = 'bg-slate-50 text-slate-900 border-slate-200 font-medium'
+    chipClass = 'border-slate-400 text-slate-600'
   }
 
   return (

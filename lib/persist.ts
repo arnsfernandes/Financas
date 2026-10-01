@@ -15,6 +15,7 @@ export interface PersistInput {
   capturedAt?: string
   originalExtractedData?: Record<string, any> | null
   allowDuplicate?: boolean
+  isUserModifiedCategory?: boolean
 }
 
 export class DuplicateTransactionError extends Error {
@@ -419,6 +420,38 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
 
         if (itemsError) {
           console.error('Supabase transaction_items insert error:', itemsError)
+        }
+      }
+
+      // 3. Learn category preference ONLY if explicitly chosen/modified by user
+      const isManualCreation = input.sourceType === 'manual' || input.originType === 'manual'
+      const isExplicitlyModified = input.isUserModifiedCategory === true
+      const originalSuggestedCat = input.originalExtractedData?.category
+      const currentCat = input.receipt.category || resolvedCategoryName
+      const categoryWasChanged = Boolean(
+        originalSuggestedCat && currentCat && originalSuggestedCat.trim().toLowerCase() !== currentCat.trim().toLowerCase()
+      )
+
+      const shouldLearnCategory = isManualCreation || isExplicitlyModified || categoryWasChanged
+
+      if (shouldLearnCategory && input.receipt.vendor && (categoryId || resolvedCategoryName)) {
+        try {
+          const { learnCategoryPreference } = await import('./categoryLearning')
+          const firstItemDesc = input.receipt.items && input.receipt.items.length > 0
+            ? input.receipt.items[0].description
+            : null
+
+          await learnCategoryPreference({
+            vendor: input.receipt.vendor,
+            categoryId,
+            categoryName: resolvedCategoryName,
+            transactionType: input.receipt.type || 'expense',
+            itemKeyword: firstItemDesc,
+            rawText,
+            source: isManualCreation ? 'user_creation' : 'user_correction',
+          })
+        } catch (learnErr) {
+          console.warn('Could not register learned category preference on save:', learnErr)
         }
       }
     } catch (e) {

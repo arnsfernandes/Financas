@@ -259,7 +259,6 @@ describe('Installment Date Anchor End-to-End Integration', () => {
       change(n => n.props?.placeholder === 'Ex: Carrefour, Padaria, Uber...', 'Azul')
       change(n => n.type === 'input' && n.props.type === 'date', '2026-06-21')
       control(n => n.type === AccountSelect).onChange('acc-inter-cc')
-      change(n => n.type === 'select', 'Cartão de Crédito')
       button('Compra Parcelada').onClick()
       change(n => n.type === 'input' && n.props.type === 'number' && n.props.min === '1', '4')
       change(n => n.type === 'input' && n.props.type === 'number' && n.props.min === '2', '4')
@@ -389,7 +388,7 @@ describe('Installment Date Anchor End-to-End Integration', () => {
 
     it('Azul Real Flow: saves current date 21/09/2026 with explicit anchor current_installment and produces June -> September 2026 in DB', async () => {
       const initialPayload = {
-        sourceType: 'manual',
+        sourceType: 'text',
         allowDuplicate: true,
         receipt: {
           type: 'expense',

@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 
 export interface TelegramWebAppUser {
   id: number
@@ -89,7 +89,20 @@ export function TelegramWebAppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const authHeader = initData ? `Bearer ${initData}` : ''
-  const fetchWithAuth = buildAuthenticatedFetch(initData)
+  const fetchWithAuth = useCallback(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const headers = new Headers(init?.headers)
+      if (authHeader) {
+        headers.set('Authorization', authHeader)
+        headers.set('x-telegram-init-data', initData)
+      }
+      return fetch(input, {
+        ...init,
+        headers,
+      })
+    },
+    [authHeader, initData]
+  )
 
   const logoutWeb = async () => {
     try {

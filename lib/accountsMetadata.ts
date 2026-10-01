@@ -1,3 +1,5 @@
+import { getSupabaseClient } from './persist'
+
 export interface AccountMetadata {
   closing_day?: number | null
   due_day?: number | null
@@ -7,82 +9,106 @@ export interface AccountMetadata {
   skin?: string | null
 }
 
-async function getFs() {
-  if (typeof window !== 'undefined') return null
-  try {
-    return await import('fs/promises')
-  } catch {
-    return null
-  }
-}
-
-async function getPath() {
-  if (typeof window !== 'undefined') return null
-  try {
-    return await import('path')
-  } catch {
-    return null
-  }
-}
-
-async function getMetadataFilePath(): Promise<string | null> {
-  const pathModule = await getPath()
-  if (!pathModule) return null
-  return pathModule.join(process.cwd(), 'data', 'accounts_metadata.json')
-}
-
-async function ensureDataDir(): Promise<void> {
-  const fsModule = await getFs()
-  const pathModule = await getPath()
-  if (!fsModule || !pathModule) return
-  try {
-    await fsModule.mkdir(pathModule.join(process.cwd(), 'data'), { recursive: true })
-  } catch {
-    // Directory already exists or cannot be created
-  }
-}
-
+/**
+ * Reads all account metadata directly from Supabase accounts table.
+ * Preserved for backwards compatibility with any existing callers.
+ */
 export async function readAccountsMetadata(): Promise<Record<string, AccountMetadata>> {
-  if (typeof window !== 'undefined') return {}
-  const fsModule = await getFs()
-  const filePath = await getMetadataFilePath()
-  if (!fsModule || !filePath) return {}
+  const supabase = getSupabaseClient()
+  if (!supabase) return {}
 
-  await ensureDataDir()
   try {
-    const raw = await fsModule.readFile(filePath, 'utf-8')
-    return JSON.parse(raw)
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('id, closing_day, due_day, custom_logo, color, skin')
+
+    if (error || !data) return {}
+
+    const result: Record<string, AccountMetadata> = {}
+    for (const acc of data) {
+      result[acc.id] = {
+        closing_day: acc.closing_day,
+        due_day: acc.due_day,
+        custom_logo: acc.custom_logo,
+        color: acc.color,
+        skin: acc.skin,
+      }
+    }
+    return result
   } catch {
     return {}
   }
 }
 
-export async function writeAccountsMetadata(data: Record<string, AccountMetadata>): Promise<void> {
-  if (typeof window !== 'undefined') return
-  const fsModule = await getFs()
-  const filePath = await getMetadataFilePath()
-  if (!fsModule || !filePath) return
-
-  await ensureDataDir()
-  await fsModule.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+/**
+ * Deprecated no-op for file writing, kept for signature backwards-compatibility.
+ */
+export async function writeAccountsMetadata(_data: Record<string, AccountMetadata>): Promise<void> {
+  // No-op: Supabase is the single source of truth
 }
 
 export async function getAccountMetadata(accountId: string): Promise<AccountMetadata> {
-  const all = await readAccountsMetadata()
-  return all[accountId] || {}
+  const supabase = getSupabaseClient()
+  if (!supabase) return {}
+
+  try {
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('closing_day, due_day, custom_logo, color, skin')
+      .eq('id', accountId)
+      .single()
+
+    if (error || !data) return {}
+    return {
+      closing_day: data.closing_day,
+      due_day: data.due_day,
+      custom_logo: data.custom_logo,
+      color: data.color,
+      skin: data.skin,
+    }
+  } catch {
+    return {}
+  }
 }
 
 export async function updateAccountMetadata(
   accountId: string,
   metadata: AccountMetadata
 ): Promise<AccountMetadata> {
-  const all = await readAccountsMetadata()
-  const existing = all[accountId] || {}
-  const updated: AccountMetadata = {
-    ...existing,
-    ...metadata,
+  const supabase = getSupabaseClient()
+  if (!supabase) return metadata
+
+  try {
+    const updates: Record<string, any> = {}
+    if (metadata.closing_day !== undefined) updates.closing_day = metadata.closing_day
+    if (metadata.due_day !== undefined) updates.due_day = metadata.due_day
+    if (metadata.custom_logo !== undefined) updates.custom_logo = metadata.custom_logo
+    if (metadata.color !== undefined) updates.color = metadata.color
+    if (metadata.skin !== undefined) updates.skin = metadata.skin
+
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('accounts').update(updates).eq('id', accountId)
+    }
+
+    return await getAccountMetadata(accountId)
+  } catch {
+    return metadata
   }
-  all[accountId] = updated
-  await writeAccountsMetadata(all)
-  return updated
+}
+
+export async function removeAccountMetadata(accountId: string): Promise<void> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return
+
+  try {
+    await supabase.from('accounts').update({
+      closing_day: null,
+      due_day: null,
+      custom_logo: null,
+      color: null,
+      skin: null,
+    }).eq('id', accountId)
+  } catch {
+    // Ignore cleanup failure
+  }
 }

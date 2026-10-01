@@ -122,6 +122,75 @@ export const storedReceiptSchema = receiptSchema.extend({
 
 export type StoredReceipt = z.infer<typeof storedReceiptSchema>
 
+export interface TransactionItem {
+  id?: string
+  transaction_id?: string
+  description: string
+  normalized_name?: string
+  quantity: number | null
+  unit_price: number | null
+  total: number | null
+  category?: string | null
+  product_id?: string | null
+  canonical_products?: {
+    id: string
+    canonical_name: string
+    brand?: string | null
+    unit_size?: string | null
+  } | null
+}
+
+export interface TransactionRecord {
+  id: string
+  type?: 'expense' | 'income'
+  account_id?: string | null
+  accounts?: Account | null
+  vendor: string | null
+  vendor_address: string | null
+  date: string | null
+  time: string | null
+  currency: string
+  category: string | null
+  category_id?: string | null
+  categories?: {
+    id: string
+    name: string
+    icon?: string | null
+    color?: string | null
+  } | null
+  subtotal: number | null
+  tax: number | null
+  tip: number | null
+  total: number
+  payment_method: string | null
+  notes: string | null
+  source_type: string
+  origin_type?: 'text' | 'image' | 'manual' | null
+  raw_text?: string | null
+  original_filename?: string | null
+  image_sha256?: string | null
+  captured_at?: string | null
+  original_extracted_data?: Record<string, any> | null
+  is_recurring?: boolean
+  recurrence_frequency?: string | null
+  recurrence_next_date?: string | null
+  recurrence_status?: 'active' | 'ended'
+  installment_group_id?: string | null
+  installment_current?: number | null
+  installment_total?: number | null
+  installment_amount?: number | null
+  review_status?: 'confirmed' | 'needs_review'
+  review_reasons?: string[]
+  vendor_id?: string | null
+  canonical_vendors?: {
+    id: string
+    canonical_name: string
+    normalized_key?: string | null
+  } | null
+  created_at: string
+  transaction_items?: TransactionItem[]
+}
+
 /**
  * Fill in the nullable fields so downstream code can rely on a complete shape.
  * The vision/language model is asked for every field, but I never assume it returned
@@ -170,3 +239,29 @@ export function normaliseReceipt(input: unknown): Receipt {
     }),
   }
 }
+
+export interface InvoicePayment {
+  id: string
+  invoice_id: string
+  amount: number
+  payment_date: string
+  payment_method?: string | null
+  from_account_id?: string | null
+  notes?: string | null
+  created_at: string
+}
+
+export interface CreditCardInvoice {
+  id: string
+  account_id: string
+  closing_date: string
+  due_date: string
+  total_amount: number
+  paid_amount: number
+  status: 'open' | 'partial' | 'paid'
+  notes?: string | null
+  created_at: string
+  updated_at: string
+  payments?: InvoicePayment[]
+}
+

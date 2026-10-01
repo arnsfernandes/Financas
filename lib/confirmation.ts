@@ -16,6 +16,7 @@ export interface PendingTransaction {
   imageSha256?: string
   originalFilename?: string | null
   createdAt: number
+  isUserModifiedCategory?: boolean
 }
 
 /**
@@ -48,8 +49,11 @@ export async function buildPreviewMessage(
   if (!accountDisplay) {
     const pm = (receipt.payment_method || '').toLowerCase()
     const isCash = pm.includes('dinheiro') || pm.includes('espécie') || pm.includes('especie')
+    const isPix = pm.includes('pix')
     if (isCash) {
       accountDisplay = `💵 Dinheiro`
+    } else if (isPix) {
+      accountDisplay = `💠 PIX`
     } else if (receipt.payment_method) {
       accountDisplay = `💳 ${receipt.payment_method}`
     } else {
@@ -299,6 +303,7 @@ export async function processConfirmationAction(
     capturedAt: new Date().toISOString(),
     originalExtractedData: pending.originalExtractedData,
     allowDuplicate: false,
+    isUserModifiedCategory: pending.isUserModifiedCategory === true,
   })
 
   return {

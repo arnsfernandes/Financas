@@ -1,90 +1,15 @@
 'use client'
 
 import React, { useState, useMemo, useEffect } from 'react'
-import {
-  Search,
-  X,
-  AlertTriangle,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Repeat,
-  CreditCard,
-  ChevronRight,
-  Edit2,
-  Trash2,
-} from 'lucide-react'
-import type { Account } from '@/lib/schema'
-import { formatBRL } from '@/lib/formatters'
+import { AlertTriangle } from 'lucide-react'
+import type { Account, TransactionItem, TransactionRecord } from '@/lib/schema'
 import { EditTransactionModal } from '@/components/modals/EditTransactionModal'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
-
-export interface TransactionItem {
-  id: string
-  product_id?: string | null
-  description: string
-  normalized_name?: string | null
-  quantity?: number | null
-  unit_price?: number | null
-  total?: number | null
-  category?: string | null
-  canonical_products?: {
-    id: string
-    canonical_name: string
-    brand?: string | null
-    unit_size?: string | null
-  } | null
-}
-
-export interface TransactionRecord {
-  id: string
-  type?: 'expense' | 'income'
-  account_id?: string | null
-  accounts?: Account | null
-  vendor: string | null
-  vendor_address: string | null
-  date: string | null
-  time: string | null
-  currency: string
-  category: string | null
-  category_id?: string | null
-  categories?: {
-    id: string
-    name: string
-    icon?: string | null
-    color?: string | null
-  } | null
-  subtotal: number | null
-  tax: number | null
-  tip: number | null
-  total: number
-  payment_method: string | null
-  notes: string | null
-  source_type: string
-  origin_type?: 'text' | 'image' | 'manual' | null
-  raw_text?: string | null
-  original_filename?: string | null
-  image_sha256?: string | null
-  captured_at?: string | null
-  original_extracted_data?: any | null
-  is_recurring?: boolean
-  recurrence_frequency?: string | null
-  recurrence_next_date?: string | null
-  recurrence_status?: 'active' | 'ended'
-  installment_group_id?: string | null
-  installment_current?: number | null
-  installment_total?: number | null
-  installment_amount?: number | null
-  review_status?: 'confirmed' | 'needs_review'
-  review_reasons?: string[]
-  vendor_id?: string | null
-  canonical_vendors?: {
-    id: string
-    canonical_name: string
-    normalized_key?: string | null
-  } | null
-  created_at: string
-  transaction_items?: TransactionItem[]
-}
+import { TransactionsFilterBar } from './TransactionsFilterBar'
+import { TransactionListItem } from './TransactionListItem'
+import { InstallmentGroupModal } from './InstallmentGroupModal'
+import { TransactionDetailModal } from './TransactionDetailModal'
+export type { TransactionItem, TransactionRecord } from '@/lib/schema'
 
 export interface InstallmentGroupItem {
   type: 'installment_group'
@@ -211,7 +136,7 @@ export function TransactionsTab({
         clearTimeout(searchTimeoutRef.current)
       }
     }
-  }, [txSearchText])
+  }, [txSearchText, fetchTransactions])
 
   // Lista de categorias para o filtro
   const [categoriesList, setCategoriesList] = useState<{ id: string; name: string }[]>([])
@@ -225,7 +150,7 @@ export function TransactionsTab({
         }
       })
       .catch(() => {})
-  }, [])
+  }, [fetchWithAuth])
 
   // Modal de Edição Completa
   const [editingTx, setEditingTx] = useState<TransactionRecord | null>(null)
@@ -234,6 +159,23 @@ export function TransactionsTab({
   const [selectedInstallmentGroup, setSelectedInstallmentGroup] = useState<InstallmentGroupItem | null>(null)
   const [selectedGroupDetails, setSelectedGroupDetails] = useState<TransactionRecord[]>([])
   const [loadingGroupInstallments, setLoadingGroupInstallments] = useState(false)
+
+  // Fechar com tecla Escape
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        if (editingTx) {
+          setEditingTx(null)
+        } else if (selectedDrawerTx) {
+          setSelectedDrawerTx(null)
+        } else if (selectedInstallmentGroup) {
+          setSelectedInstallmentGroup(null)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editingTx, selectedDrawerTx, selectedInstallmentGroup, setSelectedDrawerTx])
 
   // Estado de exclusão
   const [deletingTxId, setDeletingTxId] = useState<string | null>(null)
@@ -427,12 +369,6 @@ export function TransactionsTab({
     e.stopPropagation()
     if (deletingTxId || deletingGroupId) return
 
-    const confirmMsg = vendor
-      ? `Tem certeza que deseja excluir o lançamento de "${vendor}"?`
-      : 'Tem certeza que deseja excluir este lançamento?'
-
-    if (!window.confirm(confirmMsg)) return
-
     setDeletingTxId(id)
     try {
       await onDeleteTransaction(id, vendor)
@@ -450,15 +386,6 @@ export function TransactionsTab({
 
   async function handleDeleteGroup(groupId: string) {
     if (!groupId || deletingGroupId || deletingTxId) return
-
-    const count =
-      selectedInstallmentGroup?.installmentCount ||
-      selectedGroupDetails.length ||
-      selectedDrawerTx?.installment_total ||
-      'todas as'
-    const confirmMsg = `Excluir compra parcelada? As ${count} parcelas deste lançamento serão excluídas.`
-
-    if (!window.confirm(confirmMsg)) return
 
     setDeletingGroupId(groupId)
     setGroupDeleteError(null)
@@ -523,197 +450,47 @@ export function TransactionsTab({
   }
 
   return (
-    <section className={`space-y-6 pb-12 ${className || ''}`}>
+    <section className={`max-w-4xl mx-auto space-y-5 pb-12 ${className || ''}`}>
       {/* 1. CABEÇALHO */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#EBEEF2]">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
-            Transações
-          </h1>
-        </div>
-        <div className="flex items-center gap-2.5">
-          <span className="text-xs text-[#6B7280] font-medium">
-            {filteredDisplayItems.length} lançamento{filteredDisplayItems.length !== 1 ? 's' : ''}
-          </span>
-          <button
-            onClick={() => fetchTransactions({ search: txSearchText.trim() || undefined })}
-            disabled={loadingTx}
-            className="p-2 rounded-xl border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827] hover:border-[#D1D5DB] transition-all disabled:opacity-40 shadow-2xs cursor-pointer"
-            title="Atualizar lista"
-          >
-            <span className={`inline-block text-sm leading-none ${loadingTx ? 'animate-spin' : ''}`}>↻</span>
-          </button>
-        </div>
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#EBEEF2]">
+        <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
+          Transações
+        </h1>
+        <button
+          onClick={() => fetchTransactions({ search: txSearchText.trim() || undefined })}
+          disabled={loadingTx}
+          className="p-2 rounded-xl border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827] hover:border-[#D1D5DB] transition-all disabled:opacity-40 shadow-2xs cursor-pointer"
+          title="Atualizar lista"
+        >
+          <span className={`inline-block text-sm leading-none ${loadingTx ? 'animate-spin' : ''}`}>↻</span>
+        </button>
       </div>
 
       {/* 2. BARRA DE FERRAMENTAS E FILTROS */}
-      <div className="bg-[#F9FAFB] border border-[#EBEEF2] rounded-2xl p-4 space-y-3.5 shadow-2xs">
-        {/* Linha Principal: Busca Dominante + Seletor de Tipo */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          {/* Busca textual dominante */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#9CA3AF] absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={txSearchText}
-              onChange={(e) => setTxSearchText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-                  fetchTransactions({ search: txSearchText.trim() || undefined })
-                }
-              }}
-              placeholder="Buscar por estabelecimento, categoria ou descrição..."
-              className="w-full bg-white border border-[#E5E7EB] hover:border-[#D1D5DB] focus:border-[#2F68FE] rounded-xl pl-10 pr-9 py-2.5 text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2F68FE]/15 transition-all shadow-2xs"
-            />
-            {txSearchText && (
-              <button
-                onClick={() => {
-                  setTxSearchText('')
-                  if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-                  fetchTransactions({ search: undefined })
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] hover:text-[#111827] p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Filtro de Tipo: Todas / Despesas / Receitas */}
-          <div className="flex items-center bg-[#ECEEF2] p-1 rounded-xl shrink-0">
-            {(
-              [
-                { id: 'all', label: 'Todas' },
-                { id: 'expense', label: 'Despesas' },
-                { id: 'income', label: 'Receitas' },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setFilterType(tab.id)
-                  fetchTransactions({ type: tab.id })
-                }}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  filterType === tab.id
-                    ? 'bg-white text-[#111827] font-semibold shadow-2xs'
-                    : 'text-[#6B7280] hover:text-[#111827]'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Linha de Filtros Secundários: Conta, Categoria, Meio (se aplicável), Período e Limpar */}
-        <div className="flex flex-wrap items-center gap-2.5 text-xs">
-          {/* Conta / Cartão */}
-          <select
-            value={filterAccount}
-            onChange={(e) => {
-              const newAccountId = e.target.value
-              setFilterAccount(newAccountId)
-              const targetAcc = accounts.find((a) => a.id === newAccountId)
-              const shouldHide = Boolean(
-                !targetAcc ||
-                  targetAcc.type === 'credit_card' ||
-                  targetAcc.type === 'debit_card' ||
-                  targetAcc.type === 'cash' ||
-                  targetAcc.type !== 'bank_account'
-              )
-              if (shouldHide && filterPaymentMethod) {
-                if (setFilterPaymentMethod) setFilterPaymentMethod('')
-                fetchTransactions({ accountId: newAccountId, paymentMethod: '' })
-              } else {
-                fetchTransactions({ accountId: newAccountId })
-              }
-            }}
-            className="bg-white border border-[#E5E7EB] hover:border-[#D1D5DB] rounded-xl px-3.5 py-2 text-xs font-medium text-[#374151] focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs"
-          >
-            <option value="">Todas as contas / cartões</option>
-            {accounts.map((acc) => (
-              <option key={acc.id} value={acc.id}>
-                {acc.name} {acc.type === 'credit_card' ? '(Cartão)' : acc.institution ? `(${acc.institution})` : ''}
-              </option>
-            ))}
-          </select>
-
-          {/* Categoria */}
-          <select
-            value={filterCategory}
-            onChange={(e) => {
-              setFilterCategory(e.target.value)
-              fetchTransactions({ category: e.target.value })
-            }}
-            className="bg-white border border-[#E5E7EB] hover:border-[#D1D5DB] rounded-xl px-3.5 py-2 text-xs font-medium text-[#374151] focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs"
-          >
-            <option value="">Todas as categorias</option>
-            {categoriesList.map((cat) => (
-              <option key={cat.id} value={cat.name}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-
-          {/* Forma de Pagamento (só exibida quando relevante: conta bancária com múltiplos meios) */}
-          {!isPaymentMethodHidden && (
-            <select
-              value={filterPaymentMethod}
-              onChange={(e) => {
-                if (setFilterPaymentMethod) setFilterPaymentMethod(e.target.value)
-                fetchTransactions({ paymentMethod: e.target.value })
-              }}
-              className="bg-white border border-[#E5E7EB] hover:border-[#D1D5DB] rounded-xl px-3.5 py-2 text-xs font-medium text-[#374151] focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs"
-            >
-              <option value="">Todas as formas</option>
-              <option value="PIX">PIX</option>
-              <option value="Cartão de Débito">Débito</option>
-              <option value="Cartão de Crédito">Crédito</option>
-              <option value="Boleto">Boleto</option>
-              <option value="Transferência">Transferência</option>
-              <option value="Dinheiro">Dinheiro</option>
-              <option value="Outros">Outros</option>
-            </select>
-          )}
-
-          {/* Período (De / Até) */}
-          <div className="flex items-center gap-2 text-xs text-[#6B7280] bg-white border border-[#E5E7EB] rounded-xl px-3 py-1.5 shadow-2xs">
-            <input
-              type="date"
-              value={filterStartDate}
-              onChange={(e) => {
-                setFilterStartDate(e.target.value)
-                fetchTransactions({ startDate: e.target.value })
-              }}
-              className="bg-transparent text-xs text-[#374151] focus:outline-none cursor-pointer"
-              title="Data início"
-            />
-            <span className="text-[#9CA3AF] text-xs font-medium">até</span>
-            <input
-              type="date"
-              value={filterEndDate}
-              onChange={(e) => {
-                setFilterEndDate(e.target.value)
-                fetchTransactions({ endDate: e.target.value })
-              }}
-              className="bg-transparent text-xs text-[#374151] focus:outline-none cursor-pointer"
-              title="Data fim"
-            />
-          </div>
-
-          {/* Botão discreto para limpar filtros */}
-          {isAnyFilterActive && (
-            <button
-              onClick={handleClearAllFilters}
-              className="text-xs text-[#6B7280] hover:text-[#111827] font-medium px-3 py-1.5 hover:bg-white rounded-xl transition-colors ml-auto cursor-pointer"
-            >
-              Limpar filtros ✕
-            </button>
-          )}
-        </div>
-      </div>
+      <TransactionsFilterBar
+        txSearchText={txSearchText}
+        setTxSearchText={setTxSearchText}
+        onSearchSubmit={(text) => fetchTransactions({ search: text || undefined })}
+        filterType={filterType}
+        setFilterType={setFilterType}
+        filterAccount={filterAccount}
+        setFilterAccount={setFilterAccount}
+        accounts={accounts}
+        filterCategory={filterCategory}
+        setFilterCategory={setFilterCategory}
+        categoriesList={categoriesList}
+        filterPaymentMethod={filterPaymentMethod}
+        setFilterPaymentMethod={setFilterPaymentMethod}
+        isPaymentMethodHidden={isPaymentMethodHidden}
+        filterStartDate={filterStartDate}
+        setFilterStartDate={setFilterStartDate}
+        filterEndDate={filterEndDate}
+        setFilterEndDate={setFilterEndDate}
+        isAnyFilterActive={isAnyFilterActive}
+        handleClearAllFilters={handleClearAllFilters}
+        searchTimeoutRef={searchTimeoutRef}
+        fetchTransactions={fetchTransactions}
+      />
 
       {txError && (
         <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-2.5 text-xs flex items-center gap-2">
@@ -722,185 +499,35 @@ export function TransactionsTab({
         </div>
       )}
 
-      {/* 3. LISTA DE TRANSAÇÕES REFINADA E CONFORTÁVEL */}
+      {/* 3. LISTA DE TRANSAÇÕES: COMPACTA, FÁCIL DE ESCANEAR E COM VALOR PRÓXIMO */}
       {loadingTx && filteredDisplayItems.length === 0 ? (
-        <div className="text-center py-16 text-[#9CA3AF] text-sm font-medium animate-pulse">
+        <div className="text-center py-16 text-[#4B5563] text-sm font-medium animate-pulse">
           Carregando transações…
         </div>
       ) : filteredDisplayItems.length === 0 ? (
-        <div className="text-center py-12 border border-[#EBEEF2] rounded-2xl text-[#9CA3AF] text-sm bg-white">
+        <div className="text-center py-12 border border-[#EBEEF2] rounded-2xl text-[#4B5563] text-sm bg-white">
           Nenhuma transação encontrada com os filtros atuais.
         </div>
       ) : (
         <div className="bg-white border border-[#EBEEF2] rounded-2xl shadow-2xs overflow-hidden">
           <div className="divide-y divide-[#F4F5F7]">
             {filteredDisplayItems.map((item) => {
-              // 1. Compra Parcelada Agrupada
-              if (item.type === 'installment_group') {
-                const isSelected = selectedInstallmentGroup?.groupId === item.groupId
-
-                return (
-                  <div
-                    key={`group-${item.groupId}`}
-                    onClick={() => handleOpenInstallmentGroup(item)}
-                    className={`flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-4 hover:bg-[#F9FAFB] cursor-pointer transition-colors group ${
-                      isSelected ? 'bg-[#F0F4FF] hover:bg-[#F0F4FF]' : ''
-                    }`}
-                  >
-                    {/* Lado Esquerdo: Ícone + Título + Badge + Metadados */}
-                    <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-amber-50 text-amber-600">
-                        <CreditCard className="w-4 h-4" />
-                      </div>
-
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap leading-tight">
-                          <span className="text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
-                            {item.vendor}
-                          </span>
-                          <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-amber-50 text-amber-800 border border-amber-200/60">
-                            {item.installmentCount}x de {formatBRL(item.installmentAmount)}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-xs text-[#9CA3AF] truncate">
-                          <span className="text-[#6B7280]">
-                            {item.date
-                              ? new Date(item.date + 'T00:00:00').toLocaleDateString('pt-BR')
-                              : '—'}
-                          </span>
-                          {item.category && (
-                            <>
-                              <span>•</span>
-                              <span className="truncate text-[#6B7280]">
-                                {item.category}
-                              </span>
-                            </>
-                          )}
-                          {(item.accountName || item.paymentMethod) && (
-                            <>
-                              <span>•</span>
-                              <span className="truncate text-[#6B7280]">
-                                {item.accountName || item.paymentMethod}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Lado Direito: Valor Total + Detalhe Parcela + Seta */}
-                    <div className="flex items-center gap-3.5 shrink-0">
-                      <div className="text-right leading-tight">
-                        <span className="text-sm sm:text-base font-bold whitespace-nowrap text-[#111827] block">
-                          - {formatBRL(item.totalPurchaseAmount)}
-                        </span>
-                        <span className="text-xs text-[#9CA3AF] block font-normal mt-0.5">
-                          {item.installmentCount}x de {formatBRL(item.installmentAmount)}
-                        </span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-[#D1D5DB] group-hover:text-[#9CA3AF] transition-all" />
-                    </div>
-                  </div>
-                )
-              }
-
-              // 2. Lançamento Individual (Não parcelado)
-              const tx = item.tx
-              const isIncome = tx.type === 'income'
-              const isRecurring = tx.is_recurring
-              const isSelected = selectedDrawerTx?.id === tx.id
+              const isSelected =
+                item.type === 'installment_group'
+                  ? selectedInstallmentGroup?.groupId === item.groupId
+                  : selectedDrawerTx?.id === item.tx.id
 
               return (
-                <div
-                  key={tx.id}
-                  onClick={() => {
+                <TransactionListItem
+                  key={item.type === 'installment_group' ? `group-${item.groupId}` : item.tx.id}
+                  item={item}
+                  isSelected={isSelected}
+                  onSelectGroup={(group) => handleOpenInstallmentGroup(group)}
+                  onSelectTx={(tx) => {
                     setSelectedInstallmentGroup(null)
                     setSelectedDrawerTx(tx)
                   }}
-                  className={`flex items-center justify-between px-4 py-3.5 sm:px-5 sm:py-4 hover:bg-[#F9FAFB] cursor-pointer transition-colors group ${
-                    isSelected ? 'bg-[#F0F4FF] hover:bg-[#F0F4FF]' : ''
-                  }`}
-                >
-                  {/* Lado Esquerdo: Ícone + Título + Metadados */}
-                  <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                        isIncome
-                          ? 'bg-emerald-50 text-emerald-600'
-                          : isRecurring
-                          ? 'bg-blue-50 text-blue-600'
-                          : 'bg-[#F4F5F7] text-[#6B7280]'
-                      }`}
-                    >
-                      {isIncome ? (
-                        <ArrowDownLeft className="w-4 h-4" />
-                      ) : isRecurring ? (
-                        <Repeat className="w-4 h-4" />
-                      ) : (
-                        <ArrowUpRight className="w-4 h-4" />
-                      )}
-                    </div>
-
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap leading-tight">
-                        <span className="text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
-                          {tx.canonical_vendors?.canonical_name ||
-                            tx.vendor ||
-                            (isIncome ? 'Receita' : 'Sem estabelecimento')}
-                        </span>
-
-                        {isRecurring && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-md font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
-                            Recorrente
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 text-xs text-[#9CA3AF] truncate">
-                        <span className="text-[#6B7280]">
-                          {tx.date
-                            ? new Date(tx.date + 'T00:00:00').toLocaleDateString('pt-BR')
-                            : new Date(tx.created_at).toLocaleDateString('pt-BR')}
-                        </span>
-                        {(tx.categories?.name || tx.category) && (
-                          <>
-                            <span>•</span>
-                            <span className="inline-flex items-center gap-1.5 truncate text-[#6B7280]">
-                              {tx.categories?.color && (
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ backgroundColor: tx.categories.color }}
-                                />
-                              )}
-                              <span className="truncate">{tx.categories?.name || tx.category}</span>
-                            </span>
-                          </>
-                        )}
-                        {(tx.accounts || tx.payment_method) && (
-                          <>
-                            <span>•</span>
-                            <span className="truncate text-[#6B7280]">
-                              {tx.accounts?.name || tx.payment_method}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Lado Direito: Valor em Destaque + Seta Suave */}
-                  <div className="flex items-center gap-3.5 shrink-0">
-                    <span
-                      className={`text-sm sm:text-base font-bold whitespace-nowrap ${
-                        isIncome ? 'text-[#10B981]' : 'text-[#111827]'
-                      }`}
-                    >
-                      {isIncome ? '+' : '-'} {formatBRL(tx.total)}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-[#D1D5DB] group-hover:text-[#9CA3AF] transition-all" />
-                  </div>
-                </div>
+                />
               )
             })}
           </div>
@@ -928,479 +555,30 @@ export function TransactionsTab({
         </div>
       )}
 
-      {/* 4. DRAWER / MODAL: DETALHES DE COMPRA PARCELADA */}
-      {selectedInstallmentGroup && (
-        <div
-          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
-          onClick={() => setSelectedInstallmentGroup(null)}
-        >
-          <div
-            className="w-full max-w-lg bg-white h-full max-h-[100dvh] shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Cabeçalho do Drawer de Parcelamento */}
-            <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10 shrink-0">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-amber-50 text-amber-700">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-bold text-base text-[#111827] truncate">
-                    {selectedInstallmentGroup.vendor}
-                  </h3>
-                  <p className="text-xs text-[#6B7280]">
-                    Compra parcelada em {selectedInstallmentGroup.installmentCount}x • Total:{' '}
-                    {formatBRL(selectedInstallmentGroup.totalPurchaseAmount)}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedInstallmentGroup(null)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-[#6B7280] hover:text-[#111827] hover:bg-[#F3F4F6] transition-colors"
-                title="Fechar painel"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* 4. MODAL: DETALHES DE COMPRA PARCELADA */}
+      <InstallmentGroupModal
+        selectedInstallmentGroup={selectedInstallmentGroup}
+        selectedGroupDetails={selectedGroupDetails}
+        loadingGroupInstallments={loadingGroupInstallments}
+        groupDeleteError={groupDeleteError}
+        deletingGroupId={deletingGroupId}
+        deletingTxId={deletingTxId}
+        onClose={() => setSelectedInstallmentGroup(null)}
+        onStartEditing={handleStartEditing}
+        onDeleteSingleInstallment={handleDelete}
+        onDeleteGroup={handleDeleteGroup}
+      />
 
-            {/* Conteúdo com a Lista de Parcelas */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-              {groupDeleteError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
-                  {groupDeleteError}
-                </div>
-              )}
-
-              {/* Card Resumo do Parcelamento */}
-              <div className="p-4 bg-[#F9FAFB] border border-[#EBEEF2] rounded-2xl text-center space-y-3">
-                <div>
-                  <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
-                    Valor Total da Compra
-                  </span>
-                  <span className="text-2xl font-extrabold tracking-tight text-[#111827] block">
-                    - {formatBRL(selectedInstallmentGroup.totalPurchaseAmount)}
-                  </span>
-                  <span className="text-xs text-[#6B7280] mt-1 block">
-                    {selectedInstallmentGroup.installmentCount} parcelas de{' '}
-                    {formatBRL(selectedInstallmentGroup.installmentAmount)}
-                  </span>
-                </div>
-
-                {/* Ação de exclusão em destaque no corpo */}
-                <div className="pt-2 border-t border-[#EBEEF2]/70 flex justify-center">
-                  <button
-                    type="button"
-                    disabled={Boolean(deletingGroupId) || Boolean(deletingTxId)}
-                    onClick={() => handleDeleteGroup(selectedInstallmentGroup.groupId)}
-                    className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
-                    title="Excluir todas as parcelas desta compra parcelada"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    {deletingGroupId === selectedInstallmentGroup.groupId ? 'Excluindo compra…' : 'Excluir compra'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-[#9CA3AF]">
-                  Todas as Parcelas ({selectedGroupDetails.length}/{selectedInstallmentGroup.installmentCount})
-                </h4>
-
-                {loadingGroupInstallments && selectedGroupDetails.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-[#9CA3AF] animate-pulse">
-                    Carregando parcelas…
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {selectedGroupDetails.map((inst) => {
-                      const cur = inst.installment_current || 1
-                      const tot = inst.installment_total || selectedInstallmentGroup.installmentCount
-
-                      return (
-                        <div
-                          key={inst.id}
-                          className="bg-white border border-[#EBEEF2] rounded-xl p-3.5 shadow-sm space-y-2.5"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs text-[#111827]">
-                                  Parcela {cur} de {tot}
-                                </span>
-                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium">
-                                  {cur}/{tot}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-[#6B7280] mt-1 flex-wrap">
-                                <span className="font-medium text-[#374151]">
-                                  {inst.date
-                                    ? new Date(inst.date + 'T00:00:00').toLocaleDateString('pt-BR')
-                                    : 'Data não informada'}
-                                </span>
-                                <span>•</span>
-                                <span>{inst.accounts?.name || selectedInstallmentGroup.accountName || 'Cartão de Crédito'}</span>
-                                <span>•</span>
-                                <span>{inst.payment_method || selectedInstallmentGroup.paymentMethod || 'Cartão de Crédito'}</span>
-                                <span>•</span>
-                                <span className="px-1.5 py-0.5 rounded bg-[#F4F5F7] text-[#4B5563] text-[11px]">
-                                  {inst.categories?.name || inst.category || selectedInstallmentGroup.category || 'Outros'}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="text-right shrink-0">
-                              <span className="font-bold text-xs sm:text-sm text-[#EF4444] block">
-                                - {formatBRL(inst.total || selectedInstallmentGroup.installmentAmount)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Ações por parcela: Editar e Excluir */}
-                          <div className="pt-2 border-t border-[#F4F5F7] flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={Boolean(deletingGroupId) || deletingTxId === inst.id}
-                              onClick={(e) => handleStartEditing(e, inst)}
-                              className="px-2.5 py-1 text-xs font-medium text-[#2F68FE] bg-[#EBF2FE] hover:bg-[#DDE9FD] rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                              title="Editar esta parcela"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                              Editar
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={Boolean(deletingGroupId) || deletingTxId === inst.id}
-                              onClick={(e) => handleDelete(e, inst.id, `Parcela ${cur} de ${selectedInstallmentGroup.vendor}`)}
-                              className="px-2.5 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                              title="Excluir esta parcela"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              {deletingTxId === inst.id ? 'Excluindo…' : 'Excluir'}
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Rodapé do Drawer */}
-            <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between gap-3 shrink-0">
-              <button
-                type="button"
-                disabled={Boolean(deletingGroupId) || Boolean(deletingTxId)}
-                onClick={() => handleDeleteGroup(selectedInstallmentGroup.groupId)}
-                className="py-2.5 px-4 rounded-xl text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs"
-                title="Excluir todas as parcelas desta compra"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {deletingGroupId === selectedInstallmentGroup.groupId ? 'Excluindo compra…' : 'Excluir compra'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setGroupDeleteError(null)
-                  setSelectedInstallmentGroup(null)
-                }}
-                disabled={Boolean(deletingGroupId)}
-                className="py-2.5 px-5 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. DRAWER: DETALHES DE LANÇAMENTO INDIVIDUAL */}
-      {selectedDrawerTx && (
-        <div
-          className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
-          onClick={() => setSelectedDrawerTx(null)}
-        >
-          <div
-            className="w-full max-w-md bg-white h-full max-h-[100dvh] shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Cabeçalho do Drawer */}
-            <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white shrink-0">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                    selectedDrawerTx.type === 'income'
-                      ? 'bg-emerald-50 text-emerald-600'
-                      : 'bg-[#F4F5F7] text-[#4B5563]'
-                  }`}
-                >
-                  {selectedDrawerTx.type === 'income' ? (
-                    <ArrowDownLeft className="w-4 h-4" />
-                  ) : (
-                    <ArrowUpRight className="w-4 h-4" />
-                  )}
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-[#111827] truncate">
-                    Detalhes do Lançamento
-                  </h2>
-                  <span className="text-[11px] text-[#6B7280]">
-                    {selectedDrawerTx.date
-                      ? new Date(selectedDrawerTx.date + 'T00:00:00').toLocaleDateString('pt-BR')
-                      : new Date(selectedDrawerTx.created_at).toLocaleDateString('pt-BR')}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedDrawerTx(null)}
-                className="p-1.5 rounded-xl hover:bg-[#F4F5F7] text-[#9CA3AF] hover:text-[#111827] transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Conteúdo do Drawer */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-6 text-xs text-[#374151]">
-              {/* Valor Principal em Destaque */}
-              <div className="text-center py-2 bg-[#F9FAFB] rounded-2xl border border-[#EBEEF2] p-4 space-y-2">
-                <div>
-                  <span className="text-[11px] font-semibold text-[#6B7280] uppercase tracking-wider block mb-1">
-                    {selectedDrawerTx.type === 'income' ? 'Valor Recebido' : 'Valor Total'}
-                  </span>
-                  <span
-                    className={`text-2xl font-extrabold tracking-tight block ${
-                      selectedDrawerTx.type === 'income' ? 'text-emerald-600' : 'text-[#111827]'
-                    }`}
-                  >
-                    {selectedDrawerTx.type === 'income' ? '+' : '-'} {formatBRL(selectedDrawerTx.total)}
-                  </span>
-                  <span className="text-[11px] text-[#6B7280] mt-1 block">
-                    {selectedDrawerTx.canonical_vendors?.canonical_name ||
-                      selectedDrawerTx.vendor ||
-                      'Sem estabelecimento'}
-                  </span>
-                </div>
-
-                {/* Botões de Ação Imediatos no topo do conteúdo */}
-                <div className="pt-2 border-t border-[#EBEEF2]/80 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => handleStartEditing(e, selectedDrawerTx)}
-                    className="flex-1 py-2 px-3 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDelete(e, selectedDrawerTx.id, selectedDrawerTx.vendor)}
-                    disabled={deletingTxId === selectedDrawerTx.id || Boolean(deletingGroupId)}
-                    className="py-2 px-3 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0"
-                    title="Excluir este lançamento"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    {deletingTxId === selectedDrawerTx.id ? 'Excluindo…' : 'Excluir lançamento'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Informações de Parcelamento se aplicável */}
-              {selectedDrawerTx.installment_group_id && (selectedDrawerTx.installment_total || 0) > 1 && (
-                <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl space-y-2.5 text-xs text-amber-900">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="font-semibold block">Compra Parcelada</span>
-                      <span className="text-[11px] text-amber-700">
-                        Parcela {selectedDrawerTx.installment_current || 1} de {selectedDrawerTx.installment_total}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={Boolean(deletingGroupId) || deletingTxId === selectedDrawerTx.id}
-                      onClick={() => handleDeleteGroup(selectedDrawerTx.installment_group_id!)}
-                      className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer disabled:opacity-50"
-                      title="Excluir todas as parcelas deste parcelamento"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      {deletingGroupId === selectedDrawerTx.installment_group_id ? 'Excluindo…' : 'Excluir compra'}
-                    </button>
-                  </div>
-                  <p className="text-[11px] text-amber-800">
-                    Use &ldquo;Excluir lançamento&rdquo; para remover apenas esta parcela ou &ldquo;Excluir compra&rdquo; para remover o grupo inteiro.
-                  </p>
-                </div>
-              )}
-
-              {/* Informações Gerais */}
-              <div className="space-y-3">
-                <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#9CA3AF]">
-                  Informações Gerais
-                </h3>
-                <div className="bg-white border border-[#EBEEF2] rounded-xl p-3 divide-y divide-[#F4F5F7] space-y-2">
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-[#6B7280]">Estabelecimento</span>
-                    <span className="font-semibold text-[#111827]">
-                      {selectedDrawerTx.canonical_vendors?.canonical_name ||
-                        selectedDrawerTx.vendor ||
-                        '—'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-[#6B7280]">Categoria</span>
-                    <span className="font-semibold text-[#111827] flex items-center gap-1.5">
-                      {selectedDrawerTx.categories?.color && (
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: selectedDrawerTx.categories.color }}
-                        />
-                      )}
-                      <span>
-                        {selectedDrawerTx.categories?.name ||
-                          selectedDrawerTx.category ||
-                          'Não categorizado'}
-                      </span>
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-[#6B7280]">Conta / Meio</span>
-                    <span className="font-semibold text-[#111827]">
-                      {selectedDrawerTx.accounts?.name || 'Geral'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-[#6B7280]">Forma de Pagamento</span>
-                    <span className="font-semibold text-[#111827]">
-                      {selectedDrawerTx.payment_method || 'Não especificada'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-[#6B7280]">Tipo de Lançamento</span>
-                    <span className="font-semibold text-[#111827] capitalize">
-                      {selectedDrawerTx.type === 'income' ? 'Receita (Entrada)' : 'Despesa (Saída)'}
-                    </span>
-                  </div>
-                  {selectedDrawerTx.time && (
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-[#6B7280]">Horário</span>
-                      <span className="font-semibold text-[#111827]">
-                        {selectedDrawerTx.time}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Recorrência */}
-              {selectedDrawerTx.is_recurring && (
-                <div className="space-y-3">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#9CA3AF]">
-                    Recorrência
-                  </h3>
-                  <div className="bg-[#F9FAFB] border border-[#EBEEF2] rounded-xl p-3.5 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5 font-medium text-[#111827]">
-                        <Repeat className="w-3.5 h-3.5 text-[#2F68FE]" />
-                        Despesa Recorrente
-                      </span>
-                      <span className="text-[11px] text-[#6B7280]">
-                        {selectedDrawerTx.recurrence_status === 'ended'
-                          ? 'Encerrada'
-                          : 'Ativa (Mensal)'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Itens da Transação */}
-              {selectedDrawerTx.transaction_items && selectedDrawerTx.transaction_items.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#9CA3AF]">
-                      Itens ({selectedDrawerTx.transaction_items.length})
-                    </h3>
-                  </div>
-                  <div className="bg-white border border-[#EBEEF2] rounded-xl overflow-hidden divide-y divide-[#F4F5F7]">
-                    {selectedDrawerTx.transaction_items.map((it: any) => (
-                      <div key={it.id} className="p-2.5 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <span className="font-semibold text-[#111827] block truncate">
-                            {it.canonical_products?.canonical_name || it.description}
-                          </span>
-                          <span className="text-[10px] text-[#6B7280]">
-                            {it.quantity ? `${it.quantity}x` : '1x'}{' '}
-                            {it.unit_price ? `• ${formatBRL(it.unit_price)}/un` : ''}{' '}
-                            {it.category ? `• ${it.category}` : ''}
-                          </span>
-                        </div>
-                        <span className="font-bold text-[#111827] shrink-0">
-                          {formatBRL(it.total)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Rastreabilidade / Origem */}
-              {selectedDrawerTx.origin_type && (
-                <div className="space-y-2 pt-2 border-t border-[#F4F5F7]">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-[#9CA3AF]">
-                    Origem do Registro
-                  </h3>
-                  <div className="p-3 bg-[#F9FAFB] rounded-xl border border-[#EBEEF2] text-[11px] space-y-1.5 text-[#6B7280]">
-                    <div className="flex justify-between">
-                      <span>Origem:</span>
-                      <span className="font-medium text-[#111827] capitalize">
-                        {selectedDrawerTx.origin_type === 'image'
-                          ? 'Foto de Recibo'
-                          : selectedDrawerTx.origin_type === 'text'
-                          ? 'Texto / Descrição'
-                          : 'Manual'}
-                      </span>
-                    </div>
-                    {selectedDrawerTx.original_filename && (
-                      <div className="flex justify-between truncate">
-                        <span>Arquivo:</span>
-                        <span
-                          className="font-medium text-[#111827] truncate"
-                          title={selectedDrawerTx.original_filename}
-                        >
-                          {selectedDrawerTx.original_filename}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Rodapé de Ações do Drawer */}
-            <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={(e) => handleStartEditing(e, selectedDrawerTx)}
-                className="flex-1 py-2.5 px-4 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                Editar Lançamento
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleDelete(e, selectedDrawerTx.id, selectedDrawerTx.vendor)}
-                disabled={deletingTxId === selectedDrawerTx.id || Boolean(deletingGroupId)}
-                className="py-2.5 px-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0"
-                title="Excluir este lançamento"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {deletingTxId === selectedDrawerTx.id ? 'Excluindo…' : 'Excluir lançamento'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 5. MODAL / DETALHES DE LANÇAMENTO INDIVIDUAL */}
+      <TransactionDetailModal
+        selectedDrawerTx={selectedDrawerTx}
+        deletingTxId={deletingTxId}
+        deletingGroupId={deletingGroupId}
+        onClose={() => setSelectedDrawerTx(null)}
+        onStartEditing={handleStartEditing}
+        onDeleteTx={handleDelete}
+        onDeleteGroup={handleDeleteGroup}
+      />
 
       {/* 6. MODAL DE EDIÇÃO COMPLETA */}
       {editingTx && (

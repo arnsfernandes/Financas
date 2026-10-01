@@ -678,6 +678,9 @@ bot.on('message:text', async (ctx) => {
 
       if (correctionResult.changedFields.length > 0) {
         pending.receipt = correctionResult.updatedReceipt
+        if (correctionResult.changedFields.includes('category') || correctionResult.changedFields.includes('categoria')) {
+          pending.isUserModifiedCategory = true
+        }
         pending.createdAt = Date.now() // Renova o TTL
         pendingTransactions.set(txId, pending)
 

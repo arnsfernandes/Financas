@@ -238,7 +238,7 @@ describe('Deterministic Text Router (lib/textRouter.ts)', () => {
       expect(res.missingField).toBe('payment_method')
     })
 
-    it('requires account for Pix expense', async () => {
+    it('allows Pix expense without specific account', async () => {
       const { validateLaunchCompleteness } = await import('./textRouter')
       const pixWithoutAccount: any = {
         type: 'expense',
@@ -247,9 +247,7 @@ describe('Deterministic Text Router (lib/textRouter.ts)', () => {
         account_id: null,
       }
       const res = validateLaunchCompleteness(pixWithoutAccount, mockAccounts)
-      expect(res.isComplete).toBe(false)
-      expect(res.missingField).toBe('account')
-      expect(res.reason).toContain('conta de pagamento')
+      expect(res.isComplete).toBe(true)
     })
 
     it('rejects credit_card account for Pix expense', async () => {

@@ -1,11 +1,9 @@
-import fs from 'fs/promises'
-import path from 'path'
-import { randomUUID } from 'crypto'
+import { getSupabaseClient } from './persist'
 
 export interface ReserveMovement {
   id: string
   reserveId: string
-  type: 'deposit' | 'withdrawal' // aporte ou retirada
+  type: 'deposit' | 'withdrawal' // aporte ou retirada no frontend
   amount: number
   date: string // YYYY-MM-DD
   notes?: string | null
@@ -18,13 +16,14 @@ export interface Reserve {
   name: string
   currentBalance: number
   targetAmount?: number | null // meta opcional
+  color?: string | null
+  icon?: string | null
+  deadline?: string | null
+  accountId?: string | null
   createdAt: string
   updatedAt: string
   movements: ReserveMovement[]
 }
-
-const DATA_DIR = path.join(process.cwd(), 'data')
-const RESERVES_FILE = path.join(DATA_DIR, 'reserves.json')
 
 const DEFAULT_RESERVES: Reserve[] = [
   {
@@ -47,78 +46,80 @@ const DEFAULT_RESERVES: Reserve[] = [
       },
     ],
   },
-  {
-    id: 'res-viagem',
-    name: 'Viagem',
-    currentBalance: 2000,
-    targetAmount: 5000,
-    createdAt: '2026-09-10T12:00:00.000Z',
-    updatedAt: '2026-09-10T12:00:00.000Z',
-    movements: [
-      {
-        id: 'mov-2',
-        reserveId: 'res-viagem',
-        type: 'deposit',
-        amount: 2000,
-        date: '2026-09-10',
-        notes: 'Economia mensal',
-        fromAccount: 'Conta Corrente Principal',
-        createdAt: '2026-09-10T12:00:00.000Z',
-      },
-    ],
-  },
-  {
-    id: 'res-outros',
-    name: 'Outros',
-    currentBalance: 1500,
-    targetAmount: null,
-    createdAt: '2026-09-15T12:00:00.000Z',
-    updatedAt: '2026-09-15T12:00:00.000Z',
-    movements: [
-      {
-        id: 'mov-3',
-        reserveId: 'res-outros',
-        type: 'deposit',
-        amount: 1500,
-        date: '2026-09-15',
-        notes: 'Reserva geral',
-        fromAccount: 'Conta Corrente Principal',
-        createdAt: '2026-09-15T12:00:00.000Z',
-      },
-    ],
-  },
 ]
 
-async function ensureDataFile(): Promise<void> {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true })
-    try {
-      await fs.access(RESERVES_FILE)
-    } catch {
-      await fs.writeFile(RESERVES_FILE, JSON.stringify(DEFAULT_RESERVES, null, 2), 'utf-8')
-    }
-  } catch (err) {
-    console.error('Error ensuring reserves data file:', err)
+function mapDbMovementToDomain(row: any): ReserveMovement {
+  return {
+    id: row.id,
+    reserveId: row.reserve_id,
+    type: row.type === 'withdraw' ? 'withdrawal' : 'deposit',
+    amount: Number(row.amount) || 0,
+    date: row.date,
+    notes: row.description || null,
+    fromAccount: null,
+    createdAt: row.created_at,
+  }
+}
+
+function mapDbReserveToDomain(row: any, movements: any[] = []): Reserve {
+  return {
+    id: row.id,
+    name: row.name,
+    currentBalance: Number(row.current_amount) || 0,
+    targetAmount: row.target_amount !== null && row.target_amount !== undefined ? Number(row.target_amount) : null,
+    color: row.color || null,
+    icon: row.icon || null,
+    deadline: row.deadline || null,
+    accountId: row.account_id || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    movements: movements.map(mapDbMovementToDomain),
   }
 }
 
 export async function getReserves(): Promise<Reserve[]> {
-  await ensureDataFile()
-  try {
-    const raw = await fs.readFile(RESERVES_FILE, 'utf-8')
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed)) {
-      return parsed
-    }
-    return DEFAULT_RESERVES
-  } catch {
+  const supabase = getSupabaseClient()
+  if (!supabase) {
     return DEFAULT_RESERVES
   }
+
+  const { data: reservesData, error: reservesError } = await supabase
+    .from('reserves')
+    .select('*')
+    .order('created_at', { ascending: true })
+
+  if (reservesError || !reservesData) {
+    console.error('Error fetching reserves:', reservesError)
+    return []
+  }
+
+  if (reservesData.length === 0) {
+    return []
+  }
+
+  const reserveIds = reservesData.map((r) => r.id)
+  const { data: movementsData, error: movError } = await supabase
+    .from('reserve_movements')
+    .select('*')
+    .in('reserve_id', reserveIds)
+    .order('created_at', { ascending: false })
+
+  if (movError) {
+    console.error('Error fetching reserve movements:', movError)
+  }
+
+  const movementsByReserveId = new Map<string, any[]>()
+  for (const m of movementsData || []) {
+    const list = movementsByReserveId.get(m.reserve_id) || []
+    list.push(m)
+    movementsByReserveId.set(m.reserve_id, list)
+  }
+
+  return reservesData.map((row) => mapDbReserveToDomain(row, movementsByReserveId.get(row.id) || []))
 }
 
-export async function saveReserves(reserves: Reserve[]): Promise<void> {
-  await ensureDataFile()
-  await fs.writeFile(RESERVES_FILE, JSON.stringify(reserves, null, 2), 'utf-8')
+export async function saveReserves(_reserves: Reserve[]): Promise<void> {
+  // Deprecated no-op: Supabase tables are single source of truth
 }
 
 export async function createReserve(input: {
@@ -127,19 +128,22 @@ export async function createReserve(input: {
   targetAmount?: number | null
   notes?: string
   fromAccount?: string | null
+  color?: string | null
+  icon?: string | null
+  deadline?: string | null
+  accountId?: string | null
 }): Promise<Reserve> {
-  const reserves = await getReserves()
   const trimmed = input.name.trim()
   if (!trimmed) throw new Error('Nome da reserva é obrigatório.')
 
   const initialAmount = Math.max(0, Number(input.initialBalance) || 0)
-  const id = `res-${randomUUID()}`
-  const now = new Date().toISOString()
-  const movements: ReserveMovement[] = []
+  const supabase = getSupabaseClient()
 
-  if (initialAmount > 0) {
-    movements.push({
-      id: `mov-${randomUUID()}`,
+  if (!supabase) {
+    const now = new Date().toISOString()
+    const id = `res-mock-${Date.now()}`
+    const movements: ReserveMovement[] = initialAmount > 0 ? [{
+      id: `mov-mock-${Date.now()}`,
       reserveId: id,
       type: 'deposit',
       amount: initialAmount,
@@ -147,22 +151,64 @@ export async function createReserve(input: {
       notes: input.notes?.trim() || 'Aporte inicial',
       fromAccount: input.fromAccount || null,
       createdAt: now,
+    }] : []
+
+    return {
+      id,
+      name: trimmed,
+      currentBalance: initialAmount,
+      targetAmount: input.targetAmount ? Math.max(0, Number(input.targetAmount)) : null,
+      color: input.color || null,
+      icon: input.icon || null,
+      deadline: input.deadline || null,
+      accountId: input.accountId || null,
+      createdAt: now,
+      updatedAt: now,
+      movements,
+    }
+  }
+
+  const { data: createdReserve, error: createError } = await supabase
+    .from('reserves')
+    .insert({
+      name: trimmed,
+      current_amount: initialAmount,
+      target_amount: input.targetAmount !== undefined && input.targetAmount !== null ? Number(input.targetAmount) : null,
+      color: input.color || null,
+      icon: input.icon || null,
+      deadline: input.deadline || null,
+      account_id: input.accountId || null,
     })
+    .select('*')
+    .single()
+
+  if (createError || !createdReserve) {
+    throw new Error(`Falha ao criar reserva: ${createError?.message}`)
   }
 
-  const newReserve: Reserve = {
-    id,
-    name: trimmed,
-    currentBalance: initialAmount,
-    targetAmount: input.targetAmount ? Math.max(0, Number(input.targetAmount)) : null,
-    createdAt: now,
-    updatedAt: now,
-    movements,
+  const movements: any[] = []
+  if (initialAmount > 0) {
+    const desc = input.notes?.trim() || (input.fromAccount ? `Aporte inicial via ${input.fromAccount}` : 'Aporte inicial')
+    const { data: movData, error: movError } = await supabase
+      .from('reserve_movements')
+      .insert({
+        reserve_id: createdReserve.id,
+        amount: initialAmount,
+        type: 'deposit',
+        description: desc,
+        date: new Date().toISOString().slice(0, 10),
+      })
+      .select('*')
+      .single()
+
+    if (movError) {
+      console.error('Error adding initial movement for reserve:', movError)
+    } else if (movData) {
+      movements.push(movData)
+    }
   }
 
-  reserves.push(newReserve)
-  await saveReserves(reserves)
-  return newReserve
+  return mapDbReserveToDomain(createdReserve, movements)
 }
 
 export async function updateReserve(
@@ -170,34 +216,71 @@ export async function updateReserve(
   input: {
     name?: string
     targetAmount?: number | null
+    color?: string | null
+    icon?: string | null
+    deadline?: string | null
+    accountId?: string | null
   }
 ): Promise<Reserve> {
-  const reserves = await getReserves()
-  const idx = reserves.findIndex((r) => r.id === id)
-  if (idx === -1) throw new Error('Reserva não encontrada.')
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    throw new Error('Supabase client indisponível')
+  }
 
-  const current = reserves[idx]
+  const updates: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  }
+
   if (input.name !== undefined) {
     const trimmed = input.name.trim()
     if (!trimmed) throw new Error('Nome da reserva não pode ser vazio.')
-    current.name = trimmed
+    updates.name = trimmed
   }
 
   if (input.targetAmount !== undefined) {
-    current.targetAmount = input.targetAmount ? Math.max(0, Number(input.targetAmount)) : null
+    updates.target_amount = input.targetAmount ? Math.max(0, Number(input.targetAmount)) : null
+  }
+  if (input.color !== undefined) updates.color = input.color
+  if (input.icon !== undefined) updates.icon = input.icon
+  if (input.deadline !== undefined) updates.deadline = input.deadline
+  if (input.accountId !== undefined) updates.account_id = input.accountId
+
+  const { data: updatedData, error: updateError } = await supabase
+    .from('reserves')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (updateError || !updatedData) {
+    throw new Error(`Reserva não encontrada ou falha ao atualizar: ${updateError?.message}`)
   }
 
-  current.updatedAt = new Date().toISOString()
-  reserves[idx] = current
-  await saveReserves(reserves)
-  return current
+  const { data: movementsData } = await supabase
+    .from('reserve_movements')
+    .select('*')
+    .eq('reserve_id', id)
+    .order('created_at', { ascending: false })
+
+  return mapDbReserveToDomain(updatedData, movementsData || [])
 }
 
 export async function deleteReserve(id: string): Promise<boolean> {
-  const reserves = await getReserves()
-  const filtered = reserves.filter((r) => r.id !== id)
-  if (filtered.length === reserves.length) return false
-  await saveReserves(filtered)
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    return true
+  }
+
+  const { error } = await supabase
+    .from('reserves')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting reserve:', error)
+    return false
+  }
+
   return true
 }
 
@@ -211,42 +294,76 @@ export async function addReserveMovement(
     fromAccount?: string | null
   }
 ): Promise<{ reserve: Reserve; movement: ReserveMovement }> {
-  const reserves = await getReserves()
-  const idx = reserves.findIndex((r) => r.id === reserveId)
-  if (idx === -1) throw new Error('Reserva não encontrada.')
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    throw new Error('Supabase client indisponível')
+  }
 
   const amount = Number(input.amount)
   if (!amount || amount <= 0) {
     throw new Error('Valor deve ser maior que zero.')
   }
 
-  const current = reserves[idx]
-  if (input.type === 'withdrawal' && current.currentBalance < amount) {
-    throw new Error(`Saldo insuficiente na reserva (${current.currentBalance} disponível).`)
+  // 1. Fetch current reserve
+  const { data: currentReserve, error: fetchError } = await supabase
+    .from('reserves')
+    .select('*')
+    .eq('id', reserveId)
+    .single()
+
+  if (fetchError || !currentReserve) {
+    throw new Error('Reserva não encontrada.')
   }
 
-  const now = new Date().toISOString()
-  const movement: ReserveMovement = {
-    id: `mov-${randomUUID()}`,
-    reserveId,
-    type: input.type,
-    amount,
-    date: input.date || now.slice(0, 10),
-    notes: input.notes?.trim() || null,
-    fromAccount: input.fromAccount || null,
-    createdAt: now,
+  const currentBalance = Number(currentReserve.current_amount) || 0
+  if (input.type === 'withdrawal' && currentBalance < amount) {
+    throw new Error(`Saldo insuficiente na reserva (${currentBalance} disponível).`)
   }
 
-  if (input.type === 'deposit') {
-    current.currentBalance += amount
-  } else {
-    current.currentBalance -= amount
+  const newBalance = input.type === 'deposit' ? currentBalance + amount : currentBalance - amount
+  const dbType = input.type === 'withdrawal' ? 'withdraw' : 'deposit'
+  const desc = input.notes?.trim() || (input.fromAccount ? `Origem/Destino: ${input.fromAccount}` : null)
+
+  // 2. Insert movement
+  const { data: movementRow, error: movInsertError } = await supabase
+    .from('reserve_movements')
+    .insert({
+      reserve_id: reserveId,
+      amount,
+      type: dbType,
+      description: desc,
+      date: input.date || new Date().toISOString().slice(0, 10),
+    })
+    .select('*')
+    .single()
+
+  if (movInsertError || !movementRow) {
+    throw new Error(`Falha ao registrar movimentação: ${movInsertError?.message}`)
   }
 
-  current.movements.unshift(movement)
-  current.updatedAt = now
-  reserves[idx] = current
-  await saveReserves(reserves)
+  // 3. Update current_amount on reserves
+  const { data: updatedReserve, error: resUpdateError } = await supabase
+    .from('reserves')
+    .update({
+      current_amount: newBalance,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', reserveId)
+    .select('*')
+    .single()
 
-  return { reserve: current, movement }
+  if (resUpdateError || !updatedReserve) {
+    throw new Error(`Falha ao atualizar saldo da reserva: ${resUpdateError?.message}`)
+  }
+
+  const { data: allMovements } = await supabase
+    .from('reserve_movements')
+    .select('*')
+    .eq('reserve_id', reserveId)
+    .order('created_at', { ascending: false })
+
+  const domainReserve = mapDbReserveToDomain(updatedReserve, allMovements || [])
+  const domainMovement = mapDbMovementToDomain(movementRow)
+
+  return { reserve: domainReserve, movement: domainMovement }
 }

@@ -35,7 +35,7 @@ export function Sidebar({
 
   const navItemsFinanceiro = [
     { id: 'dashboard' as TabType, label: 'Visão Geral', icon: LayoutDashboard },
-    { id: 'transactions' as TabType, label: 'Transações', icon: ReceiptText, count: transactionsCount },
+    { id: 'transactions' as TabType, label: 'Transações', icon: ReceiptText },
     { id: 'accounts' as TabType, label: 'Contas e Cartões', icon: CreditCard },
     { id: 'categories' as TabType, label: 'Categorias', icon: Layers },
   ]
@@ -110,15 +110,6 @@ export function Sidebar({
                       <Icon className={`w-4 h-4 ${isActive ? 'text-[#2F68FE]' : 'text-[#6B7280]'}`} />
                       <span>{item.label}</span>
                     </div>
-                    {item.count !== undefined && item.count > 0 && (
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          isActive ? 'bg-[#2F68FE] text-white font-semibold' : 'bg-[#E5E7EB] text-[#6B7280]'
-                        }`}
-                      >
-                        {item.count}
-                      </span>
-                    )}
                   </button>
                 )
               })}

@@ -124,6 +124,68 @@ describe('Queries & Reports with filters', () => {
     })
   })
 
+  describe('deleteAccount', () => {
+    it('handles null client gracefully and cleans metadata', async () => {
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue(null)
+      const { deleteAccount } = await import('./queries')
+      const res = await deleteAccount('acc-123')
+      expect(res).toBe(true)
+    })
+
+    it('blocks deletion when account has linked transactions', async () => {
+      const fromMock = vi.fn().mockImplementation((table: string) => {
+        if (table === 'transactions') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 5, error: null }),
+            }),
+          }
+        }
+        return {}
+      })
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: fromMock,
+      } as any)
+
+      const { deleteAccount } = await import('./queries')
+      await expect(deleteAccount('acc-with-txs')).rejects.toThrow(
+        /Não é possível excluir: existem 5 lançamento\(s\) vinculado\(s\)/
+      )
+    })
+
+    it('deletes account successfully when there are no linked transactions', async () => {
+      const deleteEqMock = vi.fn().mockResolvedValue({ error: null })
+      const fromMock = vi.fn().mockImplementation((table: string) => {
+        if (table === 'transactions') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ count: 0, error: null }),
+            }),
+          }
+        }
+        if (table === 'accounts') {
+          return {
+            delete: vi.fn().mockReturnValue({
+              eq: deleteEqMock,
+            }),
+          }
+        }
+        return {}
+      })
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: fromMock,
+      } as any)
+
+      const { deleteAccount } = await import('./queries')
+      const res = await deleteAccount('acc-empty')
+      expect(res).toBe(true)
+      expect(fromMock).toHaveBeenCalledWith('accounts')
+      expect(deleteEqMock).toHaveBeenCalledWith('id', 'acc-empty')
+    })
+  })
+
   describe('updateTransaction', () => {
     it('handles null client gracefully', async () => {
       vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue(null)
@@ -544,8 +606,14 @@ describe('Queries & Reports with filters', () => {
       // Top vendors
       expect(summary.topVendors[0].vendor).toBe('Carrefour')
       expect(summary.topVendors[0].total).toBe(250)
+      expect(summary.topVendors[0].count).toBe(2)
+      expect(summary.topVendors[0].averageTicket).toBe(125)
+      expect(summary.topVendors[0].percentage).toBe(83.3)
       expect(summary.topVendors[1].vendor).toBe('Drogasil')
       expect(summary.topVendors[1].total).toBe(50)
+      expect(summary.topVendors[1].count).toBe(1)
+      expect(summary.topVendors[1].averageTicket).toBe(50)
+      expect(summary.topVendors[1].percentage).toBe(16.7)
 
       // Daily evolution has 30 days for September
       expect(summary.dailyExpenses).toHaveLength(30)
@@ -558,6 +626,63 @@ describe('Queries & Reports with filters', () => {
       expect(topCatInsight).toBeDefined()
       expect(topCatInsight?.title).toContain('Mercado / Supermercado')
       expect(topCatInsight?.description).toContain('83.3%')
+    })
+
+    it('consolidates all transactions of the same establishment across variations into a single group', async () => {
+      const mockTxs = [
+        { id: '1', vendor: 'Mercado Livre', date: '2026-09-02', category: 'Shopping', total: 100, created_at: '2026-09-02T10:00:00Z' },
+        { id: '2', vendor: 'MERCADO LIVRE', date: '2026-09-10', category: 'Shopping', total: 50, created_at: '2026-09-10T10:00:00Z' },
+        { id: '3', vendor: 'MercadoLivre', date: '2026-09-15', category: 'Shopping', total: 150, created_at: '2026-09-15T10:00:00Z' },
+        { id: '4', vendor: 'MERCADOLIVRE*ABC123', date: '2026-09-18', category: 'Shopping', total: 200, created_at: '2026-09-18T10:00:00Z' },
+        { id: '5', vendor: 'MP * MERCADOLIVRE', date: '2026-09-22', category: 'Shopping', total: 100, created_at: '2026-09-22T10:00:00Z' },
+        { id: '6', vendor: 'Padaria Central', date: '2026-09-25', category: 'Dining', total: 200, created_at: '2026-09-25T10:00:00Z' },
+      ]
+
+      const chainMock: any = {
+        select: vi.fn().mockReturnValue({
+          or: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: mockTxs, error: null }),
+          }),
+          order: vi.fn().mockResolvedValue({ data: mockTxs, error: null }),
+        }),
+      }
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: vi.fn().mockReturnValue(chainMock),
+      } as any)
+
+      const { getDashboardSummary } = await import('./queries')
+      const summary = await getDashboardSummary({
+        periodType: 'month',
+        referenceDate: '2026-09-22T12:00:00Z',
+      })
+
+      // Total expenses: 100 + 50 + 150 + 200 + 100 + 200 = 800
+      expect(summary.metrics.totalSpent).toBe(800)
+      expect(summary.topVendors).toHaveLength(2)
+
+      // First top vendor should be consolidated 'Mercado Livre'
+      const ml = summary.topVendors[0]
+      expect(ml.vendor).toBe('Mercado Livre')
+      expect(ml.total).toBe(600)
+      expect(ml.count).toBe(5)
+      expect(ml.percentage).toBe(75) // 600 / 800 = 75%
+      expect(ml.averageTicket).toBe(120) // 600 / 5 = 120
+      expect(ml.rawVendors).toEqual(expect.arrayContaining([
+        'Mercado Livre',
+        'MERCADO LIVRE',
+        'MercadoLivre',
+        'MERCADOLIVRE*ABC123',
+        'MP * MERCADOLIVRE',
+      ]))
+
+      // Second vendor: 'Padaria Central'
+      const padaria = summary.topVendors[1]
+      expect(padaria.vendor).toBe('Padaria Central')
+      expect(padaria.total).toBe(200)
+      expect(padaria.count).toBe(1)
+      expect(padaria.percentage).toBe(25)
+      expect(padaria.averageTicket).toBe(200)
     })
 
     it('handles week, year, and month navigation offsets correctly', async () => {
@@ -741,6 +866,75 @@ describe('Queries & Reports with filters', () => {
       expect(filteredSummary.metrics.totalIncome).toBe(0)
       expect(filteredSummary.accountMetrics).toHaveLength(1)
       expect(filteredSummary.accountMetrics[0].id).toBe('acc-nubank')
+    })
+
+    it('correctly isolates PIX transactions when PIX filter is selected in getDashboardSummary', async () => {
+      const mockAccounts = [
+        { id: 'acc-nubank', name: 'Nubank Crédito', type: 'credit_card', institution: 'Nubank', active: true },
+        { id: 'acc-itau', name: 'Itaú Corrente', type: 'bank_account', institution: 'Itaú', active: true },
+      ]
+
+      const mockTxs = [
+        { id: '1', account_id: 'acc-itau', vendor: 'Salário XPTO', date: '2026-09-05', category: 'Salário', total: 4000, type: 'income', payment_method: 'PIX', created_at: '2026-09-05T10:00:00Z', accounts: mockAccounts[1] },
+        { id: '2', account_id: 'acc-itau', vendor: 'Padaria Central', date: '2026-09-10', category: 'Alimentação', total: 50, type: 'expense', payment_method: 'PIX', created_at: '2026-09-10T10:00:00Z', accounts: mockAccounts[1] },
+        { id: '3', account_id: 'acc-nubank', vendor: 'Amazon BR', date: '2026-09-12', category: 'Compras', total: 500, type: 'expense', payment_method: 'Cartão de Crédito', created_at: '2026-09-12T10:00:00Z', accounts: mockAccounts[0] },
+      ]
+
+      const fromMock = vi.fn().mockImplementation((table: string) => {
+        if (table === 'accounts') {
+          return {
+            select: vi.fn().mockReturnValue({
+              order: vi.fn().mockResolvedValue({ data: mockAccounts, error: null }),
+            }),
+          }
+        }
+        if (table === 'transactions') {
+          const txChain: any = {}
+          txChain.select = vi.fn().mockReturnValue(txChain)
+          txChain.order = vi.fn().mockReturnValue(txChain)
+          txChain.or = vi.fn().mockReturnValue(txChain)
+          txChain.eq = vi.fn().mockReturnValue(txChain)
+          txChain.ilike = vi.fn().mockImplementation((col: string, val: any) => {
+            if (col === 'payment_method' && String(val).toUpperCase().includes('PIX')) {
+              const pixTxs = mockTxs.filter((t) => (t.payment_method || '').toUpperCase().includes('PIX'))
+              const subChain: any = {}
+              subChain.then = (resolve: any) => Promise.resolve({ data: pixTxs, error: null }).then(resolve)
+              return subChain
+            }
+            return txChain
+          })
+          txChain.then = (resolve: any) => Promise.resolve({ data: mockTxs, error: null }).then(resolve)
+          return txChain
+        }
+        return {}
+      })
+
+      vi.spyOn(persistModule, 'getSupabaseClient').mockReturnValue({
+        from: fromMock,
+      } as any)
+
+      const { getDashboardSummary } = await import('./queries')
+      const pixSummary = await getDashboardSummary({
+        periodType: 'month',
+        accountId: 'pix',
+        referenceDate: '2026-09-22T12:00:00Z',
+      })
+
+      expect(pixSummary.selectedPaymentMethod).toBe('PIX')
+      expect(pixSummary.selectedAccountId).toBeNull()
+      expect(pixSummary.metrics.totalIncome).toBe(4000)
+      expect(pixSummary.metrics.totalExpenses).toBe(50)
+      expect(pixSummary.metrics.balance).toBe(3950)
+      expect(pixSummary.metrics.transactionCount).toBe(2)
+      // PIX must not have credit card invoice commitments
+      expect(pixSummary.upcomingCommitments.upcomingRecurring).toHaveLength(0)
+      expect(pixSummary.allUpcoming).toHaveLength(0)
+      // Top categories should only include Alimentação
+      expect(pixSummary.topCategories).toHaveLength(1)
+      expect(pixSummary.topCategories[0].category).toBe('Alimentação')
+      // Top vendors should only include Padaria Central
+      expect(pixSummary.topVendors).toHaveLength(1)
+      expect(pixSummary.topVendors[0].vendor).toBe('Padaria Central')
     })
   })
 

@@ -58,6 +58,7 @@ export function AccountSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  const visibleAccounts = accounts.filter((a) => a.name?.trim().toLowerCase() !== 'pix')
   const selectedAccount = accounts.find((a) => a.id === value)
 
   async function handleCreateAccount(e: React.FormEvent) {
@@ -126,7 +127,7 @@ export function AccountSelect({
                       {selectedAccount.institution}
                     </span>
                   )}
-                  <span className="text-[10px] text-[#9CA3AF] shrink-0">
+                  <span className="text-[10px] text-[#4B5563] shrink-0 font-medium">
                     ({getAccountTypeLabel(selectedAccount.type)})
                   </span>
                 </>
@@ -134,12 +135,12 @@ export function AccountSelect({
             })()
           ) : (
             <>
-              <CreditCard className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />
-              <span className="text-[#9CA3AF] truncate">{placeholder}</span>
+              <CreditCard className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
+              <span className="text-[#6B7280] truncate">{placeholder}</span>
             </>
           )}
         </div>
-        <ChevronDown className="w-3.5 h-3.5 text-[#9CA3AF] shrink-0" />
+        <ChevronDown className="w-3.5 h-3.5 text-[#6B7280] shrink-0" />
       </button>
 
       {/* Popover / Dropdown */}
@@ -166,7 +167,7 @@ export function AccountSelect({
               </button>
 
               {/* Lista de Contas Cadastradas */}
-              {accounts.map((acc) => {
+              {visibleAccounts.map((acc) => {
                 const isSelected = value === acc.id
                 const Icon = getAccountTypeLucideIcon(acc.type)
                 return (
