@@ -97,22 +97,27 @@ export function PayInvoiceModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-[#EBEEF2] overflow-hidden animate-in zoom-in-95 duration-150"
+        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-[#EBEEF2] overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-150 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+        <div className="p-4 sm:p-5 border-b border-[#EBEEF2] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
               <CreditCard className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="font-bold text-sm text-[#111827]">Pagar Fatura</h3>
-              <p className="text-xs text-[#6B7280]">
+            <div className="min-w-0">
+              <h3 className="font-bold text-sm text-[#111827] truncate">Pagar Fatura</h3>
+              <p className="text-xs text-[#6B7280] truncate">
                 {accountName} • Vencimento: {formattedDueDate}
               </p>
             </div>
@@ -120,13 +125,13 @@ export function PayInvoiceModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
           {error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold p-3 rounded-xl">
               {error}
@@ -260,19 +265,19 @@ export function PayInvoiceModal({
           </div>
 
           {/* Botões */}
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+          <div className="pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+              className="py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
             >
               {loading ? (
                 <>

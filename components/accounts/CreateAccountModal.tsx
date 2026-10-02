@@ -68,20 +68,25 @@ export function CreateAccountModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
+      className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-[#EBEEF2] overflow-hidden"
+        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-[#EBEEF2] overflow-hidden max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between">
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
+        <div className="p-4 sm:p-5 border-b border-[#EBEEF2] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-[#EBF2FF] text-[#2F68FE] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-[#EBF2FF] text-[#2F68FE] flex items-center justify-center shrink-0">
               <CreditCard className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-[#111827]">Nova Conta / Cartão</h3>
+              <h3 className="font-bold text-sm text-[#111827]">Nova Conta / Cartão</h3>
               <p className="text-[11px] text-[#6B7280]">
                 Cadastre uma nova conta ou cartão para seus lançamentos
               </p>
@@ -90,13 +95,13 @@ export function CreateAccountModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-xl text-[#9CA3AF] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors"
+            className="p-1.5 rounded-xl text-[#9CA3AF] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={onCreateAccount} className="p-5 space-y-4">
+        <form onSubmit={onCreateAccount} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
           {accountError && (
             <div className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-100">
               {accountError}
@@ -402,18 +407,18 @@ export function CreateAccountModal({
           )}
 
           {/* Botões de Ação */}
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#EBEEF2]">
+          <div className="flex items-center justify-end gap-2 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-0 border-t border-[#EBEEF2]">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-[#6B7280] hover:bg-[#F4F5F7] transition-colors"
+              className="px-4 py-2.5 sm:py-2 rounded-xl text-xs font-semibold text-[#6B7280] hover:bg-[#F4F5F7] active:bg-[#E5E7EB] transition-colors touch-manipulation min-h-[44px] sm:min-h-0"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={savingAccount || !formName.trim()}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white text-xs font-semibold shadow-sm transition-colors disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 px-5 py-2.5 sm:py-2 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] active:bg-[#1E4ECC] text-white text-xs font-semibold shadow-sm transition-colors disabled:opacity-50 touch-manipulation min-h-[44px] sm:min-h-0"
             >
               {savingAccount ? (
                 <>

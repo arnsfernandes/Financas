@@ -523,23 +523,23 @@ export function SingleReviewForm({
       </div>
 
       {/* 5. Botões de Ação */}
-      <div className="pt-4 border-t border-[#EBEEF2] flex items-center justify-between gap-3">
+      <div className="pt-4 border-t border-[#EBEEF2] flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={handleDiscardLaunch}
           disabled={savingLaunch}
-          className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:text-slate-950 hover:bg-slate-50 bg-white text-xs font-semibold transition-all shadow-2xs disabled:opacity-50 disabled:bg-slate-100"
+          className="flex-1 sm:flex-initial px-4 py-3 sm:py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:text-slate-950 active:bg-slate-100 hover:bg-slate-50 bg-white text-xs font-semibold transition-all shadow-2xs disabled:opacity-50 disabled:bg-slate-100 touch-manipulation min-h-[44px]"
         >
           Descartar
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex-1 sm:flex-initial flex items-center gap-2">
           {duplicateWarning?.type === 'probable' && (
             <button
               type="button"
               disabled={savingLaunch}
               onClick={() => handleSaveFinalLaunch(true)}
-              className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors shadow-sm"
+              className="flex-1 sm:flex-initial px-4 py-3 sm:py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold text-xs transition-colors shadow-sm touch-manipulation min-h-[44px]"
             >
               Salvar Mesmo Assim
             </button>
@@ -548,7 +548,7 @@ export function SingleReviewForm({
             type="button"
             disabled={savingLaunch || !reviewTotal}
             onClick={() => handleSaveFinalLaunch(false)}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] active:bg-[#1E4FD9] disabled:bg-slate-200 disabled:text-slate-500 disabled:border disabled:border-slate-300 text-white font-bold text-xs transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] active:bg-[#1E4FD9] disabled:bg-slate-200 disabled:text-slate-500 disabled:border disabled:border-slate-300 text-white font-bold text-xs transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed touch-manipulation min-h-[44px]"
           >
             {savingLaunch ? (
               <>

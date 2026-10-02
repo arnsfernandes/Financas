@@ -35,12 +35,12 @@ export function TransactionListItem({
     return (
       <div
         onClick={() => onSelectGroup(item)}
-        className={`px-3.5 py-2.5 sm:px-4 sm:py-2.5 hover:bg-[#F9FAFB] cursor-pointer transition-colors group ${
+        className={`px-3 py-3 sm:px-4 sm:py-2.5 hover:bg-[#F9FAFB] active:bg-[#F0F4FF] cursor-pointer transition-colors group select-none touch-manipulation ${
           isSelected ? 'bg-[#F0F4FF] hover:bg-[#F0F4FF]' : ''
         }`}
       >
-        {/* Bloco de conteúdo relevante (~650-700px no desktop) */}
-        <div className="flex items-center gap-3.5 w-full md:max-w-[680px]">
+        {/* Bloco de conteúdo relevante */}
+        <div className="flex items-center gap-2.5 sm:gap-3.5 w-full md:max-w-[680px]">
           {/* Ícone discreto */}
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 bg-amber-50 text-amber-700">
             <CreditCard className="w-4 h-4" />
@@ -48,8 +48,8 @@ export function TransactionListItem({
 
           {/* Bloco de Identificação e Metadados */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap leading-tight">
-              <span className="text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
+            <div className="flex items-center gap-1.5 flex-wrap leading-tight">
+              <span className="text-xs sm:text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
                 {item.vendor}
               </span>
               <span className="text-[10px] px-1.5 py-0.5 rounded font-semibold bg-amber-50 text-amber-800 border border-amber-300 shrink-0">
@@ -57,15 +57,15 @@ export function TransactionListItem({
               </span>
             </div>
 
-            <div className="text-xs text-[#4B5563] truncate mt-0.5 font-medium">
+            <div className="text-[11px] sm:text-xs text-[#4B5563] truncate mt-0.5 font-medium">
               {dateStr} • {categoryStr} • {paymentStr}
             </div>
           </div>
 
-          {/* Coluna de Valor com largura fixa e alinhada + Chevron colado */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-28 sm:w-32 text-right">
-              <span className="text-sm font-bold whitespace-nowrap text-[#111827] block">
+          {/* Coluna de Valor com largura flexível no mobile + Chevron */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="text-right">
+              <span className="text-xs sm:text-sm font-bold whitespace-nowrap text-[#111827] block">
                 - {formatBRL(item.totalPurchaseAmount)}
               </span>
             </div>
@@ -96,12 +96,12 @@ export function TransactionListItem({
   return (
     <div
       onClick={() => onSelectTx(tx)}
-      className={`px-3.5 py-2.5 sm:px-4 sm:py-2.5 hover:bg-[#F9FAFB] cursor-pointer transition-colors group ${
+      className={`px-3 py-3 sm:px-4 sm:py-2.5 hover:bg-[#F9FAFB] active:bg-[#F0F4FF] cursor-pointer transition-colors group select-none touch-manipulation ${
         isSelected ? 'bg-[#F0F4FF] hover:bg-[#F0F4FF]' : ''
       }`}
     >
-      {/* Bloco de conteúdo relevante (~650-700px no desktop) */}
-      <div className="flex items-center gap-3.5 w-full md:max-w-[680px]">
+      {/* Bloco de conteúdo relevante */}
+      <div className="flex items-center gap-2.5 sm:gap-3.5 w-full md:max-w-[680px]">
         {/* Ícone */}
         <div
           className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
@@ -124,7 +124,7 @@ export function TransactionListItem({
         {/* Bloco de Identificação e Metadados */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap leading-tight">
-            <span className="text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
+            <span className="text-xs sm:text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
               {vendorName}
             </span>
 
@@ -135,7 +135,7 @@ export function TransactionListItem({
             )}
           </div>
 
-          <div className="text-xs text-[#4B5563] truncate mt-0.5 flex items-center gap-1 font-medium">
+          <div className="text-[11px] sm:text-xs text-[#4B5563] truncate mt-0.5 flex items-center gap-1 font-medium">
             <span>{dateStr}</span>
             <span>•</span>
             <span className="inline-flex items-center gap-1 truncate">
@@ -152,11 +152,11 @@ export function TransactionListItem({
           </div>
         </div>
 
-        {/* Coluna de Valor com largura fixa e alinhada + Chevron colado */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-28 sm:w-32 text-right">
+        {/* Coluna de Valor com largura flexível no mobile + Chevron */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="text-right">
             <span
-              className={`text-sm font-bold whitespace-nowrap ${
+              className={`text-xs sm:text-sm font-bold whitespace-nowrap ${
                 isIncome ? 'text-[#059669]' : 'text-[#111827]'
               }`}
             >

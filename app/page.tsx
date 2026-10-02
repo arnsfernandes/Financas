@@ -20,11 +20,30 @@ import { AssistantFloatingWidget } from '@/components/ui/AssistantFloatingWidget
 
 export type TabType = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'new'
 
+const TAB_TITLES: Record<TabType, string> = {
+  dashboard: 'Visão Geral',
+  transactions: 'Extrato de Lançamentos',
+  accounts: 'Contas e Cartões',
+  categories: 'Categorias',
+  new: 'Novo Lançamento',
+}
+
 export default function Home() {
   const { isReady, isTelegram, fetchWithAuth, user: telegramUser, logoutWeb } = useTelegramWebApp()
   const [isWebAuthenticated, setIsWebAuthenticated] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Checa URL search params para atalhos PWA (ex: /?tab=new ou /?tab=transactions)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab') as TabType | null
+      if (tabParam && ['dashboard', 'transactions', 'accounts', 'categories', 'new'].includes(tabParam)) {
+        setActiveTab(tabParam)
+      }
+    }
+  }, [])
 
   // Checa autenticação inicial para navegação web direta
   useEffect(() => {
@@ -404,6 +423,7 @@ export default function Home() {
         }}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
+        activeTabTitle={TAB_TITLES[activeTab]}
       />
 
       {/* Desktop & Mobile Sidebar */}
@@ -430,7 +450,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full pb-20 md:pb-8">
+      <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 pt-2 sm:pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-8 max-w-6xl mx-auto w-full">
         {/* ÁREA 0: DASHBOARD / VISÃO GERAL */}
         {activeTab === 'dashboard' && (
           <DashboardTab

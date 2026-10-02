@@ -28,15 +28,20 @@ export function TransactionDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px] p-0 sm:p-4 transition-opacity animate-in fade-in duration-150"
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs p-0 sm:p-4 transition-opacity animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col border border-[#EBEEF2] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-150 overflow-hidden max-h-[90vh]"
+        className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col border border-[#EBEEF2] animate-in slide-in-from-bottom sm:zoom-in-95 duration-150 overflow-hidden max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Cabeçalho do Modal */}
-        <div className="px-5 py-4 border-b border-[#EBEEF2] flex items-start justify-between bg-white shrink-0">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-[#EBEEF2] flex items-start justify-between bg-white shrink-0">
           <div className="min-w-0 pr-2">
             <h2 className="text-base font-bold text-[#111827] truncate">
               {selectedDrawerTx.canonical_vendors?.canonical_name ||
@@ -196,11 +201,11 @@ export function TransactionDetailModal({
         </div>
 
         {/* Rodapé Fixo de Ações do Modal */}
-        <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center gap-2.5 shrink-0">
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={(e) => onStartEditing(e, selectedDrawerTx)}
-            className="flex-1 py-2 px-3.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer"
+            className="flex-1 py-2.5 px-3.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] active:scale-[0.98] text-white font-semibold text-xs transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-blue-500/20 cursor-pointer"
           >
             <Edit2 className="w-3.5 h-3.5" />
             Editar lançamento
@@ -209,7 +214,7 @@ export function TransactionDetailModal({
             type="button"
             onClick={(e) => onDeleteTx(e, selectedDrawerTx.id, selectedDrawerTx.vendor)}
             disabled={deletingTxId === selectedDrawerTx.id || Boolean(deletingGroupId)}
-            className="py-2 px-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0"
+            className="py-2.5 px-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 active:scale-[0.98] font-semibold text-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-2xs shrink-0"
             title="Excluir este lançamento"
           >
             <Trash2 className="w-3.5 h-3.5" />

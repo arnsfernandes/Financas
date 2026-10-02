@@ -366,26 +366,38 @@ export function AssistantFloatingWidget() {
           onClick={() => setIsOpen(true)}
           title="Abrir Assistente Financeiro"
           aria-label="Abrir Assistente Financeiro"
-          className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-40 flex items-center gap-2.5 px-4 py-3 bg-[#2F68FE] hover:bg-[#1D52EB] active:scale-95 text-white font-medium text-sm rounded-full shadow-lg shadow-blue-500/25 transition-all duration-200 cursor-pointer group hover:shadow-xl hover:shadow-blue-500/30"
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-6 right-3.5 md:right-6 z-30 flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-3 bg-[#2F68FE] hover:bg-[#1D52EB] active:scale-95 text-white font-semibold text-xs sm:text-sm rounded-full shadow-lg shadow-blue-500/25 transition-all duration-200 cursor-pointer group hover:shadow-xl hover:shadow-blue-500/30 select-none"
           style={{ color: '#FFFFFF' }}
         >
-          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-            <Sparkles className="w-3.5 h-3.5 text-white fill-white/20" style={{ color: '#FFFFFF' }} />
+          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform shrink-0">
+            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white fill-white/20" style={{ color: '#FFFFFF' }} />
           </div>
-          <span className="font-semibold tracking-tight text-white" style={{ color: '#FFFFFF' }}>Assistente</span>
+          <span className="font-bold tracking-tight text-white" style={{ color: '#FFFFFF' }}>Assistente</span>
         </button>
       )}
 
-      {/* Painel Flutuante do Assistente */}
+      {/* Painel Flutuante do Assistente (Sheet no Mobile / Popover no Desktop) */}
       {isOpen && (
-        <div
-          className={`fixed z-50 flex flex-col bg-white border border-[#E5E7EB] shadow-2xl rounded-2xl overflow-hidden transition-all duration-200
-            /* Mobile: quase tela cheia, mantendo barra inferior */
-            inset-x-2 top-3 bottom-[74px] md:inset-auto md:bottom-6 md:right-6 md:w-[420px] md:h-[600px]
-          `}
-        >
-          {/* Cabeçalho */}
-          <div className="flex items-center justify-between px-4 py-3.5 bg-white border-b border-[#E5E7EB] select-none">
+        <>
+          {/* Backdrop no mobile */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 sm:hidden animate-in fade-in duration-150"
+            onClick={() => setIsOpen(false)}
+          />
+
+          <div
+            className="fixed z-50 flex flex-col bg-white border border-[#E5E7EB] shadow-2xl overflow-hidden transition-all duration-200
+              inset-x-0 bottom-0 top-[max(2.5rem,env(safe-area-inset-top,0px))] rounded-t-3xl sm:top-auto sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[420px] sm:h-[600px] sm:rounded-2xl
+              animate-in slide-in-from-bottom sm:slide-in-from-bottom-5 duration-200
+            "
+          >
+            {/* Mobile Grab Handle */}
+            <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0 cursor-pointer" onClick={() => setIsOpen(false)}>
+              <div className="w-10 h-1 bg-slate-300 rounded-full" />
+            </div>
+
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between px-4 pt-2 sm:pt-3.5 pb-3 bg-white border-b border-[#E5E7EB] select-none shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-xl bg-[#2F68FE] flex items-center justify-center text-white shrink-0 shadow-sm shadow-blue-500/20" style={{ color: '#FFFFFF' }}>
                 <Sparkles className="w-4 h-4 fill-white/20" style={{ color: '#FFFFFF' }} />
@@ -406,7 +418,7 @@ export function AssistantFloatingWidget() {
                 onClick={() => setIsOpen(false)}
                 title="Minimizar"
                 aria-label="Minimizar"
-                className="p-1.5 rounded-lg text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
+                className="p-2 sm:p-1.5 rounded-lg text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
               >
                 <Minimize2 className="w-4 h-4" />
               </button>
@@ -414,7 +426,7 @@ export function AssistantFloatingWidget() {
                 onClick={() => setIsOpen(false)}
                 title="Fechar"
                 aria-label="Fechar"
-                className="p-1.5 rounded-lg text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
+                className="p-2 sm:p-1.5 rounded-lg text-[#4B5563] hover:text-[#111827] hover:bg-[#F3F4F6] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -538,7 +550,7 @@ export function AssistantFloatingWidget() {
           </div>
 
           {/* Campo Inferior de Entrada */}
-          <div className="p-3 bg-white border-t border-[#E5E7EB]">
+          <div className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] bg-white border-t border-[#E5E7EB]">
             <form
               onSubmit={(e) => {
                 e.preventDefault()
@@ -578,6 +590,7 @@ export function AssistantFloatingWidget() {
             </div>
           </div>
         </div>
+        </>
       )}
     </>
   )

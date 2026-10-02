@@ -5,12 +5,16 @@ import { TelegramWebAppProvider } from '@/lib/useTelegramWebApp'
 
 export const metadata: Metadata = {
   title: 'Finanças',
-  description: 'Controle Financeiro Inteligente com IA e leitura de recibos',
+  description: 'Controle Financeiro Inteligente com IA, extrato e gestão de contas',
   applicationName: 'Finanças',
+  manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
     title: 'Finanças',
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'default',
+  },
+  formatDetection: {
+    telephone: false,
   },
   icons: {
     icon: [
@@ -24,29 +28,45 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#09090b',
+  themeColor: '#F8F9FA',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-visual',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className="bg-zinc-950 text-zinc-100">
+    <html lang="pt-BR" className="bg-[#F8F9FA] text-[#111827]">
       <head>
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
           strategy="beforeInteractive"
         />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Finanças" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="theme-color" content="#F8F9FA" />
       </head>
-      <body className="min-h-screen bg-zinc-950 antialiased selection:bg-violet-500 selection:text-white">
+      <body className="min-h-screen bg-[#F8F9FA] antialiased selection:bg-[#EBF2FF] selection:text-[#2F68FE]">
         <TelegramWebAppProvider>{children}</TelegramWebAppProvider>
+        <Script id="sw-register" strategy="afterInteractive">
+          {`
+            if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+              window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js').catch(function(err) {
+                  console.debug('ServiceWorker registration omitted:', err);
+                });
+              });
+            }
+          `}
+        </Script>
       </body>
     </html>
   )
 }
+
 

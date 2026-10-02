@@ -47,14 +47,23 @@ export function Sidebar({
   }
 
   return (
-    <aside
-      className={`fixed md:sticky top-0 left-0 z-40 h-screen w-64 bg-white border-r border-[#EBEEF2] flex flex-col justify-between p-4 transition-transform duration-200 md:translate-x-0 ${
-        mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}
-    >
-      <div className="space-y-6">
-        {/* Logo Brand */}
-        <div className="flex items-center justify-between px-2 pt-2">
+    <>
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs md:hidden transition-opacity animate-in fade-in"
+        />
+      )}
+
+      <aside
+        className={`fixed md:sticky top-0 left-0 z-50 h-screen w-64 bg-white border-r border-[#EBEEF2] flex flex-col justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] transition-transform duration-200 ease-out md:translate-x-0 ${
+          mobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
+        }`}
+      >
+        <div className="space-y-6">
+          {/* Logo Brand */}
+          <div className="flex items-center justify-between px-2 pt-1">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-[#2F68FE] flex items-center justify-center text-white shadow-copilot-button">
               <Sparkles className="w-4 h-4" />
@@ -131,5 +140,6 @@ export function Sidebar({
         </div>
       )}
     </aside>
-  )
+  </>
+)
 }

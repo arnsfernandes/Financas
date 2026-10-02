@@ -111,14 +111,19 @@ export function AccountDetailDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-end sm:items-stretch sm:justify-end bg-black/40 backdrop-blur-xs transition-opacity"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-right duration-200"
+        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-none h-[92vh] sm:h-full shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-[#EBEEF2] flex items-start justify-between gap-4">
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
+        <div className="p-4 sm:p-6 border-b border-[#EBEEF2] flex items-start justify-between gap-3 sm:gap-4 sticky top-0 bg-white z-10">
           <div className="flex items-center gap-3 min-w-0">
             <InstitutionLogo
               institution={account.institution}
@@ -819,11 +824,11 @@ export function AccountDetailDrawer({
           })()}
         </div>
 
-        <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-end">
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-[#4B5563] hover:text-[#111827] hover:bg-white transition-colors"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-semibold text-[#4B5563] hover:text-[#111827] bg-white border border-[#E5E7EB] hover:bg-[#F3F4F6] transition-colors"
           >
             Fechar
           </button>

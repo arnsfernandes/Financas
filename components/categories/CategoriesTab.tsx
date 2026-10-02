@@ -490,9 +490,20 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
 
       {/* 4. Modal Criar / Editar Categoria */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/40 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md border border-[#EBEEF2] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-4 border-b border-[#EBEEF2] flex items-center justify-between">
+        <div
+          className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setModalOpen(false)}
+        >
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-2xl shadow-xl w-full sm:max-w-md border border-[#EBEEF2] overflow-hidden max-h-[92vh] flex flex-col animate-in slide-in-from-bottom sm:zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile Grab Handle */}
+            <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+              <div className="w-10 h-1 bg-slate-300 rounded-full" />
+            </div>
+
+            <div className="p-4 sm:p-5 border-b border-[#EBEEF2] flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-[#111827]">
                   {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
@@ -506,13 +517,13 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
-                className="text-[#9CA3AF] hover:text-[#111827] text-lg p-1 rounded-xl hover:bg-[#F4F5F7] transition-colors"
+                className="p-1.5 rounded-xl text-[#9CA3AF] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmitModal} className="p-4 space-y-4 text-xs">
+            <form onSubmit={handleSubmitModal} className="p-4 sm:p-5 space-y-4 text-xs overflow-y-auto flex-1">
               {modalError && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl p-2.5 flex items-center gap-1.5">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -595,7 +606,7 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                 <label className="text-[11px] font-semibold text-[#4B5563] block mb-1.5">
                   Ícone Lucide
                 </label>
-                <div className="grid grid-cols-8 gap-1.5 max-h-32 overflow-y-auto p-1.5 bg-[#F9FAFB] rounded-xl border border-[#EBEEF2]">
+                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-[#F9FAFB] rounded-xl border border-[#EBEEF2]">
                   {AVAILABLE_CATEGORY_ICONS.map((iconName) => {
                     const IconComp = getCategoryLucideIcon(iconName)
                     const isSelected = formIcon === iconName
@@ -604,7 +615,7 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                         key={iconName}
                         type="button"
                         onClick={() => setFormIcon(iconName)}
-                        className={`p-2 rounded-lg flex items-center justify-center transition-colors ${
+                        className={`p-2 rounded-lg flex items-center justify-center transition-colors touch-manipulation min-h-[36px] ${
                           isSelected
                             ? 'bg-[#2F68FE] text-white shadow-xs'
                             : 'text-[#6B7280] hover:bg-[#EBEEF2] hover:text-[#111827]'
@@ -619,18 +630,18 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
               </div>
 
               {/* Botões do Modal */}
-              <div className="flex gap-2 pt-2 border-t border-[#EBEEF2]">
+              <div className="flex gap-2 pt-2 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-0 border-t border-[#EBEEF2]">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="flex-1 py-2 text-xs text-[#6B7280] hover:bg-[#F4F5F7] rounded-xl font-medium transition-colors"
+                  className="flex-1 py-2.5 sm:py-2 text-xs text-[#6B7280] hover:bg-[#F4F5F7] active:bg-[#E5E7EB] rounded-xl font-medium transition-colors touch-manipulation min-h-[44px] sm:min-h-0"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={modalLoading}
-                  className="flex-1 py-2 text-xs bg-[#2F68FE] hover:bg-[#1D52EB] text-white font-semibold rounded-xl transition-all shadow-copilot-button disabled:opacity-50"
+                  className="flex-1 py-2.5 sm:py-2 text-xs bg-[#2F68FE] hover:bg-[#1D52EB] active:bg-[#1E4ECC] text-white font-semibold rounded-xl transition-all shadow-copilot-button disabled:opacity-50 touch-manipulation min-h-[44px] sm:min-h-0"
                 >
                   {modalLoading ? 'Salvando...' : editingCategory ? 'Salvar Alterações' : 'Criar Categoria'}
                 </button>

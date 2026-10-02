@@ -141,7 +141,7 @@ export function MonthPicker({
 
       {/* Popover compacto de seleção de mês */}
       {isOpen && (
-        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-50 w-64 bg-white border border-[#EBEEF2] rounded-2xl shadow-xl p-3 animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute top-full left-0 sm:left-1/2 sm:-translate-x-1/2 mt-1.5 z-50 w-64 max-w-[calc(100vw-2rem)] bg-white border border-[#EBEEF2] rounded-2xl shadow-xl p-3 animate-in fade-in zoom-in-95 duration-100">
           {/* Navegação de Ano */}
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#F4F5F7]">
             <button

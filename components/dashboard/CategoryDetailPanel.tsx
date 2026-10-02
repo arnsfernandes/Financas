@@ -42,20 +42,25 @@ export function CategoryDetailPanel({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
+      className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end bg-black/40 backdrop-blur-xs transition-opacity"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200"
+        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-none h-[90vh] sm:h-full shadow-2xl flex flex-col sm:border-l border-[#EBEEF2] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Cabeçalho do Painel */}
-        <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="p-4 sm:p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="min-w-0 flex-1">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#6B7280] block mb-0.5">
               Detalhamento de Categoria
             </span>
-            <h2 className="text-xl font-bold text-[#111827] truncate">
+            <h2 className="text-lg sm:text-xl font-bold text-[#111827] truncate">
               {category.category}
             </h2>
           </div>
@@ -236,11 +241,11 @@ export function CategoryDetailPanel({
         </div>
 
         {/* Rodapé do Painel */}
-        <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between">
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="w-full py-2 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors text-center"
+            className="w-full py-2.5 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors text-center"
           >
             Fechar
           </button>

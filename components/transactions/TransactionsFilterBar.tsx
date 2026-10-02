@@ -134,7 +134,7 @@ export function TransactionsFilterBar({
               fetchTransactions({ accountId: newAccountId })
             }
           }}
-          className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs"
+          className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs max-w-full"
         >
           <option value="">Todas as contas / cartões</option>
           {accounts.map((acc) => (
@@ -151,7 +151,7 @@ export function TransactionsFilterBar({
             setFilterCategory(e.target.value)
             fetchTransactions({ category: e.target.value })
           }}
-          className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs"
+          className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs max-w-full"
         >
           <option value="">Todas as categorias</option>
           {categoriesList.map((cat) => (
@@ -169,7 +169,7 @@ export function TransactionsFilterBar({
               if (setFilterPaymentMethod) setFilterPaymentMethod(e.target.value)
               fetchTransactions({ paymentMethod: e.target.value })
             }}
-            className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs"
+            className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs max-w-full"
           >
             <option value="">Todas as formas</option>
             <option value="PIX">PIX</option>

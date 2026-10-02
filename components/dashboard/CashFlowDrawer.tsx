@@ -41,15 +41,20 @@ export function CashFlowDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex justify-end bg-black/40 backdrop-blur-[2px] transition-opacity"
+      className="fixed inset-0 z-[100] flex items-end sm:items-stretch sm:justify-end bg-black/40 backdrop-blur-xs transition-opacity"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg bg-white h-full shadow-2xl flex flex-col border-l border-[#EBEEF2] animate-in slide-in-from-right duration-200"
+        className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-none h-[90vh] sm:h-full shadow-2xl flex flex-col sm:border-l border-[#EBEEF2] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-right duration-200"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Cabeçalho do Drawer */}
-        <div className="p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="p-4 sm:p-5 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex items-center gap-3 min-w-0">
             <div
               className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
@@ -229,10 +234,10 @@ export function CashFlowDrawer({
         </div>
 
         {/* Rodapé do Drawer com Botão Contextual de Novo Lançamento */}
-        <div className="p-4 border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between gap-3">
+        <div className="p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] border-t border-[#EBEEF2] bg-[#F9FAFB] flex items-center justify-between gap-3">
           <button
             onClick={onClose}
-            className="py-2 px-3.5 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors"
+            className="py-2.5 px-4 rounded-xl border border-[#E5E7EB] bg-white text-xs font-semibold text-[#374151] hover:bg-[#F3F4F6] transition-colors"
           >
             Fechar
           </button>
@@ -245,7 +250,7 @@ export function CashFlowDrawer({
                 onOpenNewLaunch(typeToAdd)
               }
             }}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm ${
+            className={`flex-1 py-2.5 px-4 rounded-xl text-white font-semibold text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] ${
               drawerType === 'income'
                 ? 'bg-[#10B981] hover:bg-[#059669]'
                 : 'bg-[#2F68FE] hover:bg-[#2557D6]'

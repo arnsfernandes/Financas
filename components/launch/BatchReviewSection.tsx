@@ -246,12 +246,12 @@ export function BatchReviewSection({
       </div>
 
       {/* Ações do Lote */}
-      <div className="pt-4 border-t border-[#EBEEF2] flex items-center justify-between gap-3">
+      <div className="pt-4 border-t border-[#EBEEF2] flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:pb-0">
         <button
           type="button"
           onClick={onDiscard}
           disabled={savingLaunch}
-          className="px-4 py-2.5 rounded-xl border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] bg-white text-xs font-medium transition-colors shadow-sm"
+          className="flex-1 sm:flex-initial px-4 py-3 sm:py-2.5 rounded-xl border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] active:bg-[#F4F5F7] bg-white text-xs font-medium transition-colors shadow-sm touch-manipulation min-h-[44px]"
         >
           Descartar Todos
         </button>
@@ -260,7 +260,7 @@ export function BatchReviewSection({
           type="button"
           disabled={savingLaunch || batchDrafts.length === 0}
           onClick={onSaveBatch}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-sm"
+          className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] active:bg-[#1E4ECC] disabled:opacity-50 text-white font-semibold text-xs transition-colors shadow-sm touch-manipulation min-h-[44px]"
         >
           {savingLaunch ? (
             <>

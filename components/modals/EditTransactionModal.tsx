@@ -308,10 +308,15 @@ export function EditTransactionModal({
   const itemsTotalSum = editingTx.items.reduce((acc, it) => acc + (parseFloat(String(it.total)) || 0), 0)
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-white border border-[#EBEEF2] rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-6 animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white border-t sm:border border-[#EBEEF2] rounded-t-3xl sm:rounded-2xl max-w-lg w-full max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-200">
+        {/* Mobile Grab Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 bg-white flex justify-center shrink-0">
+          <div className="w-10 h-1 bg-slate-300 rounded-full" />
+        </div>
+
         {/* Cabeçalho */}
-        <div className="px-5 py-4 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-[#EBEEF2] flex items-center justify-between bg-white sticky top-0 z-10">
           <div>
             <h3 className="text-base font-bold text-[#111827]">Editar Transação</h3>
             <p className="text-xs text-[#6B7280]">Ajuste os dados principais do lançamento.</p>
@@ -319,13 +324,13 @@ export function EditTransactionModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-[#9CA3AF] hover:text-[#111827] text-lg p-1.5 rounded-xl hover:bg-[#F4F5F7] transition-colors"
+            className="text-[#9CA3AF] hover:text-[#111827] text-lg p-2 sm:p-1.5 rounded-xl hover:bg-[#F4F5F7] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSaveEdit} className="p-5 overflow-y-auto space-y-4 flex-1 text-xs text-[#374151]">
+        <form onSubmit={handleSaveEdit} className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 text-xs text-[#374151]">
           {editError && (
             <div className="border border-red-200 bg-red-50 text-red-700 rounded-xl px-4 py-2.5 text-xs flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
@@ -903,19 +908,19 @@ export function EditTransactionModal({
           </div>
 
           {/* 8. BOTÕES DO MODAL (Salvar evidente, Cancelar secundário) */}
-          <div className="pt-3 border-t border-[#EBEEF2] flex items-center justify-end gap-3 sticky bottom-0 bg-white z-10 py-1">
+          <div className="pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] border-t border-[#EBEEF2] flex items-center justify-end gap-2.5 sticky bottom-0 bg-white z-10">
             <button
               type="button"
               onClick={onClose}
               disabled={savingEdit}
-              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-[#6B7280] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors disabled:opacity-50"
+              className="py-2.5 px-4 rounded-xl text-xs font-semibold text-[#4B5563] hover:text-[#111827] bg-white border border-[#E5E7EB] hover:bg-[#F4F5F7] transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={savingEdit}
-              className="px-6 py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-md shadow-[#2F68FE]/20 active:scale-[0.98]"
+              className="flex-1 sm:flex-initial py-2.5 px-6 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] text-center"
             >
               {savingEdit ? 'Salvando…' : 'Salvar Alterações'}
             </button>
