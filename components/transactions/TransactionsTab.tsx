@@ -451,8 +451,8 @@ export function TransactionsTab({
 
   return (
     <section className={`max-w-4xl mx-auto space-y-5 pb-12 ${className || ''}`}>
-      {/* 1. CABEÇALHO */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#EBEEF2]">
+      {/* 1. CABEÇALHO (Oculto no mobile pois o MobileHeader já exibe o contexto "Extrato de Lançamentos") */}
+      <div className="hidden md:flex items-center justify-between gap-3 pb-3 border-b border-[#EBEEF2]">
         <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
           Transações
         </h1>
@@ -501,16 +501,16 @@ export function TransactionsTab({
 
       {/* 3. LISTA DE TRANSAÇÕES: COMPACTA, FÁCIL DE ESCANEAR E COM VALOR PRÓXIMO */}
       {loadingTx && filteredDisplayItems.length === 0 ? (
-        <div className="text-center py-16 text-[#4B5563] text-sm font-medium animate-pulse">
+        <div className="text-center py-16 text-[#98A2B3] text-xs font-normal animate-pulse">
           Carregando transações…
         </div>
       ) : filteredDisplayItems.length === 0 ? (
-        <div className="text-center py-12 border border-[#EBEEF2] rounded-2xl text-[#4B5563] text-sm bg-white">
+        <div className="text-center py-12 border border-[#EBEEF2] rounded-2xl text-[#98A2B3] text-xs bg-white">
           Nenhuma transação encontrada com os filtros atuais.
         </div>
       ) : (
         <div className="bg-white border border-[#EBEEF2] rounded-2xl shadow-2xs overflow-hidden">
-          <div className="divide-y divide-[#F4F5F7]">
+          <div className="divide-y divide-[#F2F4F7]">
             {filteredDisplayItems.map((item) => {
               const isSelected =
                 item.type === 'installment_group'

@@ -295,11 +295,6 @@ export function CategorySelect({
                             <CatIcon className="w-3 h-3 stroke-[2.5]" />
                           </span>
                           <span className="truncate">{cat.name}</span>
-                          {cat.is_system && (
-                            <span className="text-[9px] text-[#9CA3AF] bg-[#F4F5F7] px-1.5 py-0.2 rounded">
-                              Sistema
-                            </span>
-                          )}
                         </div>
 
                         {isSelected && <Check className="w-3.5 h-3.5 text-[#2F68FE] shrink-0" />}

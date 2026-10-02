@@ -18,26 +18,26 @@ export function SpendingCompositionCard({
   onOpenCategoryDetail,
 }: SpendingCompositionCardProps) {
   const colors = [
-    '#2F68FE', // Azul Copilot
-    '#10B981', // Verde
+    '#6366F1', // Indigo suave
+    '#10B981', // Verde esmeralda
     '#F59E0B', // Âmbar
     '#EC4899', // Rosa
     '#8B5CF6', // Roxo suave
-    '#94A3B8', // Cinza slate para 'Outros'
+    '#71717A', // Cinza neutro
   ]
 
   return (
-    <div className="lg:col-span-6 bg-white border border-[#EBEEF2] rounded-2xl p-5 shadow-sm flex flex-col h-full justify-between">
+    <div className="lg:col-span-6 bg-[#151518] sm:bg-white border border-white/[0.06] sm:border-[#EBEEF2] rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col h-full justify-between">
       <div>
         <div className="flex items-center justify-between gap-1.5 mb-3">
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-[#111827]">Composição dos Gastos</h2>
-            <p className="text-[11px] text-[#4B5563]">Distribuição por categoria</p>
+            <h2 className="text-xs sm:text-base font-semibold text-white sm:text-[#111827] tracking-tight">Onde você gastou</h2>
+            <p className="text-[10px] sm:text-[11px] text-neutral-400 sm:text-[#4B5563]">Distribuição por categoria</p>
           </div>
         </div>
 
         {!topCategories || topCategories.length === 0 ? (
-          <div className="text-center py-12 text-[#6B7280] text-xs">
+          <div className="text-center py-6 text-neutral-400 sm:text-[#6B7280] text-xs">
             Nenhuma despesa categorizada neste período.
           </div>
         ) : (
@@ -57,7 +57,7 @@ export function SpendingCompositionCard({
               donutSegments.push({
                 name: 'Outros',
                 total: Number(restTotal.toFixed(2)),
-                color: '#94A3B8',
+                color: '#71717A',
               })
             }
 
@@ -81,13 +81,13 @@ export function SpendingCompositionCard({
             }
 
             return (
-              <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start pt-1">
-                {/* Donut Chart Compacto com Total ao Centro (Top 5 + Outros) */}
-                <div className="shrink-0 flex flex-col items-center justify-center pt-1">
+              <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-center sm:items-start pt-1">
+                {/* Donut Chart apenas no Desktop (oculto no mobile) */}
+                <div className="hidden sm:flex shrink-0 flex-col items-center justify-center pt-0.5">
                   <div className="relative w-36 h-36 rounded-full flex items-center justify-center p-2.5 shadow-inner" style={conicStyle}>
-                    <div className="w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center p-1.5 text-center shadow-sm">
+                    <div className="w-24 h-24 bg-white rounded-full flex flex-col items-center justify-center p-1 text-center shadow-xs">
                       <span className="text-[9px] font-semibold uppercase tracking-wider text-[#4B5563]">
-                        Total Gasto
+                        Total
                       </span>
                       <span className="text-sm font-extrabold text-[#111827] tracking-tight mt-0.5">
                         {formatBRL(totalExpenses)}
@@ -99,14 +99,10 @@ export function SpendingCompositionCard({
                   </div>
                 </div>
 
-                {/* Lista das Categorias com barra horizontal discreta de proporção */}
-                <div className="w-full space-y-1 min-w-0">
-                  <div className="text-[10px] text-[#4B5563] font-semibold pb-1 flex justify-between uppercase tracking-wider border-b border-[#F4F5F7]">
-                    <span>Categoria</span>
-                    <span>Total</span>
-                  </div>
-                  <div className="space-y-1.5 max-h-[230px] overflow-y-auto pr-1">
-                    {allCategories.map((cat: any, i: number) => {
+                {/* Lista Compacta de Categorias no Mobile estilo Apple */}
+                <div className="w-full space-y-2 min-w-0">
+                  <div className="space-y-1.5 max-h-[260px] sm:max-h-[210px] overflow-y-auto pr-0.5">
+                    {allCategories.slice(0, 5).map((cat: any, i: number) => {
                       const pct = cat.percentage ?? (totalExpenses > 0 ? Number(((cat.total / totalExpenses) * 100).toFixed(1)) : 0)
                       const catColor = cat.color || colors[i % colors.length]
                       return (
@@ -114,30 +110,31 @@ export function SpendingCompositionCard({
                           key={i}
                           type="button"
                           onClick={() => onOpenCategoryDetail(cat)}
-                          className="w-full flex flex-col py-1.5 px-2 rounded-lg hover:bg-[#F9FAFB] border border-transparent hover:border-[#EBEEF2] transition-all text-left group"
+                          className="w-full flex flex-col py-1.5 px-2 rounded-xl hover:bg-white/[0.03] sm:hover:bg-[#F9FAFB] border border-transparent transition-all text-left group active:scale-[0.99]"
                           title={`Ver detalhes de ${cat.category}`}
                         >
                           <div className="w-full flex items-center justify-between gap-2 text-xs">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <span
-                                className="w-2 h-2 rounded-full shrink-0"
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
                                 style={{ backgroundColor: catColor }}
                               />
-                              <span className="font-medium text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
+                              <span className="font-normal text-white sm:text-[#111827] group-hover:text-indigo-400 sm:group-hover:text-[#2F68FE] transition-colors truncate text-xs tracking-tight">
                                 {cat.category}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="font-semibold text-[#111827]">
+                              <span className="font-light sm:font-semibold text-white sm:text-[#111827] text-xs tabular-nums">
                                 {formatBRL(cat.total)}
                               </span>
-                              <span className="text-[10px] font-semibold text-[#374151] bg-[#F4F5F7] px-1.5 py-0.2 rounded min-w-[34px] text-right border border-[#E5E7EB]/70">
+                              <span className="text-[10px] font-normal text-neutral-400 min-w-[28px] text-right">
                                 {pct}%
                               </span>
                             </div>
                           </div>
 
-                          <div className="w-full h-1 bg-[#F4F5F7] rounded-full mt-1.5 overflow-hidden">
+                          {/* Barra horizontal fina e proporcional */}
+                          <div className="w-full h-1 bg-white/[0.06] sm:bg-[#F4F5F7] rounded-full mt-1.5 overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-300"
                               style={{

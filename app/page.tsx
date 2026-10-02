@@ -89,7 +89,8 @@ export default function Home() {
     overrideOffset?: number,
     overrideStart?: string,
     overrideEnd?: string,
-    overrideAccountId?: string
+    overrideAccountId?: string,
+    overridePaymentMethod?: string
   ) => {
     setLoadingDashboard(true)
     setDashboardError('')
@@ -103,7 +104,9 @@ export default function Home() {
       const params = new URLSearchParams()
       params.append('period', pType)
       params.append('monthOffset', String(mOffset))
-      if (aId === 'pix') {
+      if (overridePaymentMethod) {
+        params.append('paymentMethod', overridePaymentMethod)
+      } else if (aId === 'pix') {
         params.append('paymentMethod', 'PIX')
       } else if (aId) {
         params.append('accountId', aId)
@@ -405,7 +408,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] text-[#111827] flex flex-col md:flex-row font-sans selection:bg-[#EBF2FF] selection:text-[#2F68FE]">
+    <div className="min-h-screen bg-[#F7F8FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#3B82F6]/20 selection:text-[#0F172A]">
       {/* Mobile Top Header */}
       <MobileHeader
         setActiveTab={(tab) => {
@@ -450,7 +453,7 @@ export default function Home() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 pt-2 sm:pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-8 max-w-6xl mx-auto w-full">
+      <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 pt-2 sm:pt-6 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-8 max-w-6xl mx-auto w-full">
         {/* ÁREA 0: DASHBOARD / VISÃO GERAL */}
         {activeTab === 'dashboard' && (
           <DashboardTab

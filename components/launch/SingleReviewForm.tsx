@@ -13,6 +13,7 @@ import {
   CreditCard,
   Repeat,
   Check,
+  ChevronDown,
 } from 'lucide-react'
 import { formatBRL } from '@/lib/formatters'
 import { CategorySelect } from '@/components/categories/CategorySelect'
@@ -74,6 +75,8 @@ export interface SingleReviewFormProps {
   setReviewInstallmentTotal: (v: string) => void
   reviewNotes: string
   setReviewNotes: (v: string) => void
+  showMoreDetails?: boolean
+  setShowMoreDetails?: (v: boolean | ((prev: boolean) => boolean)) => void
   savingLaunch: boolean
   handleDiscardLaunch: () => void
   handleSaveFinalLaunch: (force?: boolean) => Promise<void>
@@ -122,23 +125,33 @@ export function SingleReviewForm({
   setReviewInstallmentTotal,
   reviewNotes,
   setReviewNotes,
+  showMoreDetails: propShowMoreDetails,
+  setShowMoreDetails: propSetShowMoreDetails,
   savingLaunch,
   handleDiscardLaunch,
   handleSaveFinalLaunch,
 }: SingleReviewFormProps) {
+  const isAutoExpanded = Boolean(
+    reviewIsRecurring ||
+      reviewIsInstallment ||
+      reviewNotes ||
+      (reviewItems && reviewItems.length > 0)
+  )
+  const showMore = propShowMoreDetails !== undefined ? (propShowMoreDetails || isAutoExpanded) : true
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 1. Alerta Contextual de Validação ou Duplicidade */}
       {duplicateWarning && (
         <div
-          className={`border rounded-xl p-3.5 text-xs space-y-2 ${
+          className={`border rounded-2xl p-3.5 text-xs space-y-2 ${
             duplicateWarning.type === 'exact'
               ? 'border-red-200 bg-red-50 text-red-900'
               : 'border-amber-200 bg-amber-50 text-amber-900'
           }`}
         >
           <div className="flex items-center gap-1.5 font-semibold">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <AlertCircle className={`w-4 h-4 shrink-0 ${duplicateWarning.type === 'exact' ? 'text-red-600' : 'text-amber-600'}`} />
             <span>
               {duplicateWarning.type === 'exact'
                 ? 'Duplicata exata detectada no banco de dados'
@@ -150,7 +163,7 @@ export function SingleReviewForm({
       )}
 
       {reviewNeedsReview && reviewValidationReasons.length > 0 && !duplicateWarning && (
-        <div className="border border-amber-200 bg-amber-50/70 text-amber-900 rounded-xl p-3.5 text-xs space-y-1">
+        <div className="border border-amber-200 bg-amber-50 text-amber-900 rounded-2xl p-3.5 text-xs space-y-1">
           <div className="flex items-center gap-1.5 font-semibold">
             <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
             <span>Por favor, confira os campos destacados antes de salvar:</span>
@@ -164,187 +177,156 @@ export function SingleReviewForm({
       )}
 
       {/* 2. Tipo (Despesa / Receita) e Valor Principal */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
-        {/* Seletor Despesa / Receita */}
-        <div className="sm:col-span-5 space-y-1.5">
-          <label className="text-xs font-semibold text-[#111827] block">Tipo de Movimentação</label>
-          <div className="flex p-1 bg-[#F4F5F7] rounded-xl border border-[#E5E7EB]">
-            <button
-              type="button"
-              onClick={() => setReviewType('expense')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                reviewType === 'expense'
-                  ? 'bg-white text-red-600 shadow-2xs'
-                  : 'text-[#6B7280] hover:text-[#111827]'
-              }`}
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>Despesa</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setReviewType('income')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                reviewType === 'income'
-                  ? 'bg-white text-emerald-600 shadow-2xs'
-                  : 'text-[#6B7280] hover:text-[#111827]'
-              }`}
-            >
-              <ArrowDownLeft className="w-3.5 h-3.5" />
-              <span>Receita</span>
-            </button>
-          </div>
+      <div className="space-y-4">
+        {/* Seletor Segmented Control Despesa / Receita */}
+        <div className="flex p-1 bg-[#F2F4F7] rounded-xl border border-transparent">
+          <button
+            type="button"
+            onClick={() => setReviewType('expense')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              reviewType === 'expense'
+                ? 'bg-white text-[#0F172A] shadow-2xs font-semibold'
+                : 'text-[#667085] hover:text-[#0F172A]'
+            }`}
+          >
+            <ArrowUpRight className="w-3.5 h-3.5 text-rose-500" />
+            <span>Despesa</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReviewType('income')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              reviewType === 'income'
+                ? 'bg-white text-[#0F172A] shadow-2xs font-semibold'
+                : 'text-[#667085] hover:text-[#0F172A]'
+            }`}
+          >
+            <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-500" />
+            <span>Receita</span>
+          </button>
         </div>
 
-        {/* Valor Total */}
-        <div className="sm:col-span-7 space-y-1.5">
-          <label className="text-xs font-semibold text-[#111827] block">
-            {reviewIsInstallment ? 'Valor da Parcela (R$)' : 'Valor Total (R$)'}
-          </label>
-          <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-[#9CA3AF]">
-              R$
-            </span>
+        {/* Valor Hero Grande e Limpo */}
+        <div className="text-center py-5 px-3 bg-white rounded-2xl border border-[#EBEEF2] shadow-2xs space-y-1">
+          <span className="text-[11px] font-normal text-[#667085] block tracking-wider uppercase">
+            {reviewIsInstallment ? 'Valor da Parcela' : 'Valor Total'}
+          </span>
+          <div className="flex items-baseline justify-center gap-1">
+            <span className="text-lg font-light text-[#98A2B3]">R$</span>
             <input
               type="text"
               inputMode="decimal"
               value={reviewTotal}
               onChange={(e) => setReviewTotal(e.target.value)}
               placeholder="0,00"
-              className={`w-full bg-[#F9FAFB] border rounded-xl pl-10 pr-4 py-2 text-base font-extrabold text-[#111827] placeholder-[#9CA3AF] focus:bg-white focus:outline-none focus:ring-2 transition-all ${
-                reviewType === 'income'
-                  ? 'focus:ring-emerald-500/20 focus:border-emerald-500'
-                  : 'focus:ring-[#2F68FE]/20 focus:border-[#2F68FE]'
-              } ${!reviewTotal ? 'border-amber-300' : 'border-[#E5E7EB]'}`}
+              className="w-48 bg-transparent text-center text-3xl sm:text-4xl font-light text-[#0F172A] tracking-tight tabular-nums focus:outline-none placeholder:text-[#98A2B3]"
             />
           </div>
         </div>
       </div>
 
       {/* 3. Grade Principal de Campos: Estabelecimento, Categoria, Conta, Meio, Data */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="space-y-3">
         {/* Estabelecimento */}
         <div className="space-y-1">
-          <label className="text-xs font-semibold text-[#111827] flex items-center gap-1">
-            <Store className="w-3.5 h-3.5 text-[#6B7280]" />
-            <span>{reviewType === 'income' ? 'Fonte / Pagador' : 'Estabelecimento / Local'}</span>
+          <label className="text-[11px] font-medium text-[#667085] flex items-center gap-1 px-1">
+            <Store className="w-3.5 h-3.5 text-[#98A2B3]" />
+            <span>{reviewType === 'income' ? 'Fonte / Pagador' : 'Estabelecimento'}</span>
           </label>
           <input
             type="text"
             value={reviewVendor}
             onChange={(e) => setReviewVendor(e.target.value)}
             placeholder="Ex: Carrefour, Padaria, Uber..."
-            className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white rounded-xl px-3 py-2 text-xs text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#2F68FE] transition-all"
+            className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] placeholder:text-[#98A2B3] focus:outline-none transition-all"
           />
         </div>
 
-        {/* Categoria */}
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-[#111827] flex items-center gap-1">
-            <Tag className="w-3.5 h-3.5 text-[#6B7280]" />
-            <span>Categoria</span>
-          </label>
-          <CategorySelect
-            type={reviewType}
-            value={reviewCategoryId}
-            fallbackName={reviewCategory}
-            onChange={(id, name) => {
-              setReviewCategoryId(id)
-              setReviewCategory(name)
-            }}
-            placeholder="Selecionar categoria..."
-            className="text-xs"
-          />
-        </div>
-
-        {/* Conta / Cartão */}
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-[#111827] flex items-center gap-1">
-            <CreditCard className="w-3.5 h-3.5 text-[#6B7280]" />
-            <span>Conta / Cartão</span>
-          </label>
-          <AccountSelect
-            accounts={localAccounts as any}
-            value={reviewAccountId || null}
-            onChange={(id) => {
-              const newAccId = id || ''
-              setReviewAccountId(newAccId)
-              const inferredPm = getCardPaymentMethod(newAccId, localAccounts)
-              if (inferredPm) {
-                setReviewPaymentMethod(inferredPm)
-              }
-            }}
-            onAccountCreated={(newAcc) => {
-              setLocalAccounts((prev) => [...prev, newAcc])
-            }}
-            placeholder="Selecione a conta/cartão..."
-            className="text-xs"
-          />
-        </div>
-
-        {/* Forma de Pagamento (somente exibida quando a conta não for cartão) */}
-        {!getCardPaymentMethod(reviewAccountId, localAccounts) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Categoria */}
           <div className="space-y-1">
-            <label className="text-xs font-semibold text-[#111827] block">
-              Forma de Pagamento
+            <label className="text-[11px] font-medium text-[#667085] flex items-center gap-1 px-1">
+              <Tag className="w-3.5 h-3.5 text-[#98A2B3]" />
+              <span>Categoria</span>
             </label>
-            <select
-              value={reviewPaymentMethod}
-              onChange={(e) => setReviewPaymentMethod(e.target.value)}
-              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white rounded-xl px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE] transition-all"
-            >
-              <option value="">Não especificada</option>
-              <option value="PIX">PIX</option>
-              <option value="Cartão de Crédito">Cartão de Crédito</option>
-              <option value="Cartão de Débito">Cartão de Débito</option>
-              <option value="Dinheiro">Dinheiro</option>
-              <option value="Boleto">Boleto</option>
-              <option value="Transferência">Transferência</option>
-              <option value="Outros">Outros</option>
-            </select>
+            <CategorySelect
+              type={reviewType}
+              value={reviewCategoryId}
+              fallbackName={reviewCategory}
+              onChange={(id, name) => {
+                setReviewCategoryId(id)
+                setReviewCategory(name)
+              }}
+              placeholder="Selecionar categoria..."
+              className="text-xs bg-[#F2F4F7] border-transparent text-[#0F172A]"
+            />
           </div>
-        )}
 
-        {/* Data e Hora */}
-        <div className="space-y-1">
-          <label className="text-xs font-semibold text-[#111827] block">Data do Lançamento</label>
-          <div className="grid grid-cols-2 gap-2">
+          {/* Conta / Cartão */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-[#667085] flex items-center gap-1 px-1">
+              <CreditCard className="w-3.5 h-3.5 text-[#98A2B3]" />
+              <span>Conta / Cartão</span>
+            </label>
+            <AccountSelect
+              accounts={localAccounts as any}
+              value={reviewAccountId || null}
+              onChange={(id) => {
+                const newAccId = id || ''
+                setReviewAccountId(newAccId)
+                const inferredPm = getCardPaymentMethod(newAccId, localAccounts)
+                if (inferredPm) {
+                  setReviewPaymentMethod(inferredPm)
+                }
+              }}
+              onAccountCreated={(newAcc) => {
+                setLocalAccounts((prev) => [...prev, newAcc])
+              }}
+              placeholder="Selecione a conta/cartão..."
+              className="text-xs bg-[#F2F4F7] border-transparent text-[#0F172A]"
+            />
+          </div>
+        </div>
+
+        {/* Forma de Pagamento / Data */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {!getCardPaymentMethod(reviewAccountId, localAccounts) ? (
+            <div className="space-y-1">
+              <label className="text-[11px] font-medium text-[#667085] block px-1">
+                Forma de Pagamento
+              </label>
+              <select
+                value={reviewPaymentMethod}
+                onChange={(e) => setReviewPaymentMethod(e.target.value)}
+                className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none transition-all"
+              >
+                <option value="">Não especificada</option>
+                <option value="PIX">PIX</option>
+                <option value="Cartão de Crédito">Cartão de Crédito</option>
+                <option value="Cartão de Débito">Cartão de Débito</option>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Boleto">Boleto</option>
+                <option value="Transferência">Transferência</option>
+                <option value="Outros">Outros</option>
+              </select>
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-[#667085] block px-1">Data do Lançamento</label>
             <input
               type="date"
               value={reviewDate}
               onChange={(e) => setReviewDate(e.target.value)}
-              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white rounded-xl px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE] transition-all"
-            />
-            <input
-              type="time"
-              value={reviewTime}
-              onChange={(e) => setReviewTime(e.target.value)}
-              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white rounded-xl px-3 py-2 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE] transition-all"
+              className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] focus:outline-none transition-all"
             />
           </div>
         </div>
       </div>
 
-      {/* 4. Opções Avançadas: Itens, Recorrência, Parcelamento e Notas */}
+      {/* 4. Opções: Recorrência & Parcelamento */}
       <div className="space-y-3 pt-2 border-t border-[#EBEEF2]">
-        {/* Botão de Drawer de Itens */}
-        <div className="flex items-center justify-between p-3 bg-[#F9FAFB] border border-[#EBEEF2] rounded-xl">
-          <div className="flex items-center gap-2">
-            <Package className="w-4 h-4 text-[#6B7280]" />
-            <span className="text-xs font-medium text-[#111827]">Itens Detalhados</span>
-            <span className="text-[10px] text-[#6B7280]">({reviewItems.length} cadastrados)</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowItemsDrawer(true)}
-            className="text-xs font-semibold text-[#2F68FE] hover:underline flex items-center gap-1"
-          >
-            <Eye className="w-3.5 h-3.5" />
-            <span>{reviewItems.length > 0 ? 'Ver / Editar Itens' : 'Adicionar Itens'}</span>
-          </button>
-        </div>
-
-        {/* Botões: Recorrência & Parcelamento */}
+        {/* Botões rápidos: Recorrência & Parcelamento */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -359,10 +341,10 @@ export function SingleReviewForm({
                 }
               }
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 border cursor-pointer ${
               reviewIsRecurring
-                ? 'bg-[#2F68FE]/10 text-[#2F68FE] border-[#2F68FE]/30 shadow-sm font-semibold'
-                : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#111827] font-medium'
+                ? 'bg-[#EBF2FF] text-[#2F68FE] border-[#2F68FE]/30 font-medium'
+                : 'bg-[#F2F4F7] text-[#667085] border-transparent hover:text-[#0F172A]'
             }`}
           >
             <Repeat className="w-3.5 h-3.5" />
@@ -376,10 +358,10 @@ export function SingleReviewForm({
               setReviewIsInstallment(nextVal)
               if (nextVal) setReviewIsRecurring(false)
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 border ${
+            className={`px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 border cursor-pointer ${
               reviewIsInstallment
-                ? 'bg-[#2F68FE]/10 text-[#2F68FE] border-[#2F68FE]/30 shadow-sm font-semibold'
-                : 'bg-white text-[#6B7280] border-[#E5E7EB] hover:text-[#111827] font-medium'
+                ? 'bg-[#EBF2FF] text-[#2F68FE] border-[#2F68FE]/30 font-medium'
+                : 'bg-[#F2F4F7] text-[#667085] border-transparent hover:text-[#0F172A]'
             }`}
           >
             <CreditCard className="w-3.5 h-3.5" />
@@ -389,11 +371,11 @@ export function SingleReviewForm({
 
         {/* Expansão Recorrência */}
         {reviewIsRecurring && (
-          <div className="p-3.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs space-y-2.5 animate-in fade-in duration-150">
+          <div className="p-3.5 bg-white border border-[#EBEEF2] rounded-2xl text-xs space-y-3 animate-in fade-in duration-150 shadow-2xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] text-[#4B5563] block mb-1 font-medium">
-                  Dia Fixo do Vencimento:
+                <label className="text-[11px] text-[#667085] block mb-1 font-medium">
+                  Dia do Vencimento:
                 </label>
                 <input
                   type="number"
@@ -423,12 +405,12 @@ export function SingleReviewForm({
                       )
                     }
                   }}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE]"
+                  className="w-full bg-[#F2F4F7] border border-transparent rounded-xl px-3 py-1.5 text-xs text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2F68FE]"
                 />
               </div>
 
               <div>
-                <label className="text-[11px] text-[#4B5563] block mb-1 font-medium">
+                <label className="text-[11px] text-[#667085] block mb-1 font-medium">
                   Próxima Data Prevista:
                 </label>
                 <input
@@ -440,48 +422,45 @@ export function SingleReviewForm({
                       setReviewRecurrenceDueDay(String(parseInt(e.target.value.slice(8, 10), 10)))
                     }
                   }}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE]"
+                  className="w-full bg-[#F2F4F7] border border-transparent rounded-xl px-3 py-1.5 text-xs text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2F68FE]"
                 />
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-[#374151] cursor-pointer pt-1 border-t border-[#E5E7EB]/60 select-none">
+            <label className="flex items-center gap-2 text-xs text-[#667085] cursor-pointer pt-1 border-t border-[#EBEEF2] select-none">
               <input
                 type="checkbox"
                 checked={reviewIsEstimated}
                 onChange={(e) => setReviewIsEstimated(e.target.checked)}
-                className="rounded border-[#D1D5DB] text-[#2F68FE] focus:ring-[#2F68FE] w-3.5 h-3.5 accent-[#2F68FE]"
+                className="rounded border-slate-300 text-[#2F68FE] focus:ring-[#2F68FE] w-3.5 h-3.5 accent-[#2F68FE]"
               />
-              <span className="font-medium">Valor estimado (varia todo mês, ex: água, luz, energia)</span>
+              <span className="font-normal">Valor estimado (varia todo mês, ex: energia, água)</span>
             </label>
-            <span className="text-[10px] text-[#9CA3AF] block">
-              Quando o valor real for lançado no mês, a previsão será automaticamente atualizada sem duplicar.
-            </span>
           </div>
         )}
 
         {/* Expansão Parcelamento */}
         {reviewIsInstallment && (
-          <div className="p-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl text-xs space-y-2 animate-in fade-in duration-150">
+          <div className="p-3.5 bg-white border border-[#EBEEF2] rounded-2xl text-xs space-y-3 animate-in fade-in duration-150 shadow-2xs">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] text-[#6B7280] block mb-1">Parcela Atual:</label>
+                <label className="text-[11px] text-[#667085] block mb-1">Parcela Atual:</label>
                 <input
                   type="number"
                   min="1"
                   value={reviewInstallmentCurrent}
                   onChange={(e) => setReviewInstallmentCurrent(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE]"
+                  className="w-full bg-[#F2F4F7] border border-transparent rounded-xl px-3 py-1.5 text-xs text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2F68FE]"
                 />
               </div>
               <div>
-                <label className="text-[11px] text-[#6B7280] block mb-1">Total de Parcelas:</label>
+                <label className="text-[11px] text-[#667085] block mb-1">Total de Parcelas:</label>
                 <input
                   type="number"
                   min="2"
                   value={reviewInstallmentTotal}
                   onChange={(e) => setReviewInstallmentTotal(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1 text-xs text-[#111827] focus:outline-none focus:border-[#2F68FE]"
+                  className="w-full bg-[#F2F4F7] border border-transparent rounded-xl px-3 py-1.5 text-xs text-[#0F172A] focus:outline-none focus:bg-white focus:border-[#2F68FE]"
                 />
               </div>
             </div>
@@ -498,9 +477,9 @@ export function SingleReviewForm({
                 return `${day}/${m}/${y}`
               }
               return (
-                <div className="pt-1 text-[11px] text-[#6B7280] flex items-center justify-between border-t border-[#E5E7EB]">
+                <div className="pt-2 text-[11px] text-[#667085] flex items-center justify-between border-t border-[#EBEEF2]">
                   <span>Cronograma ({tot}x):</span>
-                  <span className="font-medium text-[#111827]">
+                  <span className="font-medium text-[#0F172A]">
                     1/{tot}: {formatPreviewDate(firstDate)} → {tot}/{tot}: {formatPreviewDate(lastDate)}
                   </span>
                 </div>
@@ -509,37 +488,74 @@ export function SingleReviewForm({
           </div>
         )}
 
-        {/* Observações */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-medium text-[#6B7280] block">Observações (Opcional):</label>
-          <input
-            type="text"
-            value={reviewNotes}
-            onChange={(e) => setReviewNotes(e.target.value)}
-            placeholder="Anotações adicionais, tags ou detalhes..."
-            className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white rounded-xl px-3 py-2 text-xs text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:border-[#2F68FE] transition-all"
-          />
+        {/* Mais Detalhes (Itens & Observações) */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (propSetShowMoreDetails) {
+                propSetShowMoreDetails((prev) => !prev)
+              }
+            }}
+            className="flex items-center gap-1.5 text-xs font-medium text-[#667085] hover:text-[#0F172A] py-1 select-none cursor-pointer"
+          >
+            <span>{showMore ? 'Ocultar itens e notas' : 'Mais detalhes (itens detalhados, observações)'}</span>
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showMore ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showMore && (
+            <div className="space-y-3 pt-2.5 border-t border-[#EBEEF2] mt-1.5 animate-in fade-in duration-150">
+              {/* Botão de Drawer de Itens */}
+              <div className="flex items-center justify-between p-3 bg-white border border-[#EBEEF2] rounded-2xl shadow-2xs">
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4 text-[#98A2B3]" />
+                  <span className="text-xs font-medium text-[#0F172A]">Itens Detalhados</span>
+                  <span className="text-[10px] text-[#667085]">({reviewItems.length} cadastrados)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowItemsDrawer(true)}
+                  className="text-xs font-medium text-[#2F68FE] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>{reviewItems.length > 0 ? 'Ver / Editar' : 'Adicionar'}</span>
+                </button>
+              </div>
+
+              {/* Observações */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-[#667085] block px-1">Observações (Opcional):</label>
+                <input
+                  type="text"
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  placeholder="Anotações adicionais ou tags..."
+                  className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-3.5 py-2.5 text-xs text-[#0F172A] placeholder:text-[#98A2B3] focus:outline-none transition-all"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 5. Botões de Ação */}
-      <div className="pt-4 border-t border-[#EBEEF2] flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
+      {/* 5. Botões de Ação: Descartar discreto e Salvar destacado */}
+      <div className="pt-4 border-t border-[#EBEEF2] flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={handleDiscardLaunch}
           disabled={savingLaunch}
-          className="flex-1 sm:flex-initial px-4 py-3 sm:py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:text-slate-950 active:bg-slate-100 hover:bg-slate-50 bg-white text-xs font-semibold transition-all shadow-2xs disabled:opacity-50 disabled:bg-slate-100 touch-manipulation min-h-[44px]"
+          className="text-xs font-medium text-[#667085] hover:text-[#0F172A] px-3 py-2 transition-colors cursor-pointer"
         >
           Descartar
         </button>
 
-        <div className="flex-1 sm:flex-initial flex items-center gap-2">
+        <div className="flex items-center gap-2">
           {duplicateWarning?.type === 'probable' && (
             <button
               type="button"
               disabled={savingLaunch}
               onClick={() => handleSaveFinalLaunch(true)}
-              className="flex-1 sm:flex-initial px-4 py-3 sm:py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold text-xs transition-colors shadow-sm touch-manipulation min-h-[44px]"
+              className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs transition-colors shadow-2xs touch-manipulation min-h-[42px]"
             >
               Salvar Mesmo Assim
             </button>
@@ -548,7 +564,7 @@ export function SingleReviewForm({
             type="button"
             disabled={savingLaunch || !reviewTotal}
             onClick={() => handleSaveFinalLaunch(false)}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 sm:py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] active:bg-[#1E4FD9] disabled:bg-slate-200 disabled:text-slate-500 disabled:border disabled:border-slate-300 text-white font-bold text-xs transition-all shadow-sm cursor-pointer disabled:cursor-not-allowed touch-manipulation min-h-[44px]"
+            className="flex items-center justify-center gap-1.5 px-6 py-2.5 rounded-xl bg-[#2F68FE] hover:bg-[#2554D0] active:scale-95 disabled:bg-slate-200 disabled:text-slate-400 text-white font-medium text-xs transition-all shadow-2xs cursor-pointer disabled:cursor-not-allowed touch-manipulation min-h-[42px]"
           >
             {savingLaunch ? (
               <>

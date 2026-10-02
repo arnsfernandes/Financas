@@ -1,7 +1,7 @@
 'use client'
 
-import React from 'react'
-import { Search, X } from 'lucide-react'
+import React, { useState } from 'react'
+import { Search, X, SlidersHorizontal } from 'lucide-react'
 import type { Account } from '@/lib/schema'
 
 export interface TransactionsFilterBarProps {
@@ -53,170 +53,223 @@ export function TransactionsFilterBar({
   searchTimeoutRef,
   fetchTransactions,
 }: TransactionsFilterBarProps) {
+  const [showSecondaryFilters, setShowSecondaryFilters] = useState(false)
+
+  // Quantidade de filtros secundários ativos (excluindo busca e tipo)
+  const activeSecondaryCount = [
+    Boolean(filterAccount),
+    Boolean(filterCategory),
+    Boolean(filterPaymentMethod && !isPaymentMethodHidden),
+    Boolean(filterStartDate || filterEndDate),
+  ].filter(Boolean).length
+
   return (
-    <div className="bg-[#F9FAFB] border border-[#EBEEF2] rounded-2xl p-3.5 space-y-2.5 shadow-2xs">
-      {/* Linha 1: Busca sozinha ocupando toda a largura */}
-      <div className="relative w-full">
-        <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={txSearchText}
-          onChange={(e) => setTxSearchText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-              onSearchSubmit(txSearchText.trim())
-            }
+    <div className="bg-white border border-[#EBEEF2] rounded-2xl p-3 space-y-2.5 shadow-2xs select-none">
+      {/* Segmented Control iOS: Todos / Gastos / Entradas */}
+      <div className="flex bg-[#F2F4F7] p-1 rounded-xl border border-transparent">
+        <button
+          type="button"
+          onClick={() => {
+            setFilterType('all')
+            fetchTransactions({ type: 'all' })
           }}
-          placeholder="Buscar por estabelecimento, categoria ou descrição..."
-          className="w-full bg-white border border-slate-300 hover:border-slate-400 focus:border-[#2F68FE] rounded-xl pl-10 pr-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2F68FE]/20 transition-all shadow-2xs"
-        />
-        {txSearchText && (
-          <button
-            onClick={() => {
-              setTxSearchText('')
-              if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
-              fetchTransactions({ search: undefined })
-            }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 p-1 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        )}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+            filterType === 'all'
+              ? 'bg-white text-[#0F172A] font-semibold shadow-2xs'
+              : 'text-[#667085] hover:text-[#0F172A]'
+          }`}
+        >
+          Todos
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setFilterType('expense')
+            fetchTransactions({ type: 'expense' })
+          }}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+            filterType === 'expense'
+              ? 'bg-white text-[#0F172A] font-semibold shadow-2xs'
+              : 'text-[#667085] hover:text-[#0F172A]'
+          }`}
+        >
+          Gastos
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setFilterType('income')
+            fetchTransactions({ type: 'income' })
+          }}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+            filterType === 'income'
+              ? 'bg-white text-[#0F172A] font-semibold shadow-2xs'
+              : 'text-[#667085] hover:text-[#0F172A]'
+          }`}
+        >
+          Entradas
+        </button>
       </div>
 
-      {/* Linha 2: Filtros secundários compactos e organizados */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        {/* Seletor de Tipo: Todas / Despesas / Receitas */}
-        <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg shrink-0 border border-slate-300/60">
-          {(
-            [
-              { id: 'all', label: 'Todas' },
-              { id: 'expense', label: 'Despesas' },
-              { id: 'income', label: 'Receitas' },
-            ] as const
-          ).map((tab) => (
+      {/* Linha 2: Busca e Botão Filtros */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="w-3.5 h-3.5 text-[#98A2B3] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={txSearchText}
+            onChange={(e) => setTxSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+                onSearchSubmit(txSearchText.trim())
+              }
+            }}
+            placeholder="Buscar lançamentos..."
+            className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl pl-9 pr-8 py-2 text-xs text-[#0F172A] placeholder:text-[#98A2B3] focus:outline-none transition-all"
+          />
+          {txSearchText && (
             <button
-              key={tab.id}
               onClick={() => {
-                setFilterType(tab.id)
-                fetchTransactions({ type: tab.id })
+                setTxSearchText('')
+                if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current)
+                fetchTransactions({ search: undefined })
               }}
-              className={`px-2.5 py-1 rounded-md text-xs transition-all cursor-pointer ${
-                filterType === tab.id
-                  ? 'bg-white text-slate-900 font-bold shadow-2xs'
-                  : 'text-slate-700 hover:text-slate-950 font-medium'
-              }`}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#98A2B3] hover:text-[#0F172A] p-1 cursor-pointer"
             >
-              {tab.label}
+              <X className="w-3.5 h-3.5" />
             </button>
-          ))}
+          )}
         </div>
 
-        {/* Conta / Cartão */}
-        <select
-          value={filterAccount}
-          onChange={(e) => {
-            const newAccountId = e.target.value
-            setFilterAccount(newAccountId)
-            const targetAcc = accounts.find((a) => a.id === newAccountId)
-            const shouldHide = Boolean(
-              !targetAcc ||
-                targetAcc.type === 'credit_card' ||
-                targetAcc.type === 'debit_card' ||
-                targetAcc.type === 'cash' ||
-                targetAcc.type !== 'bank_account'
-            )
-            if (shouldHide && filterPaymentMethod) {
-              if (setFilterPaymentMethod) setFilterPaymentMethod('')
-              fetchTransactions({ accountId: newAccountId, paymentMethod: '' })
-            } else {
-              fetchTransactions({ accountId: newAccountId })
-            }
-          }}
-          className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs max-w-full"
+        {/* Botão Filtros Secundários */}
+        <button
+          type="button"
+          onClick={() => setShowSecondaryFilters(!showSecondaryFilters)}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-normal transition-all shrink-0 cursor-pointer ${
+            activeSecondaryCount > 0 || showSecondaryFilters
+              ? 'bg-[#EBF2FF] border-[#2F68FE]/30 text-[#2F68FE] font-semibold'
+              : 'bg-[#F2F4F7] border-transparent text-[#667085] hover:text-[#0F172A]'
+          }`}
         >
-          <option value="">Todas as contas / cartões</option>
-          {accounts.map((acc) => (
-            <option key={acc.id} value={acc.id}>
-              {acc.name} {acc.type === 'credit_card' ? '(Cartão)' : acc.institution ? `(${acc.institution})` : ''}
-            </option>
-          ))}
-        </select>
-
-        {/* Categoria */}
-        <select
-          value={filterCategory}
-          onChange={(e) => {
-            setFilterCategory(e.target.value)
-            fetchTransactions({ category: e.target.value })
-          }}
-          className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs max-w-full"
-        >
-          <option value="">Todas as categorias</option>
-          {categoriesList.map((cat) => (
-            <option key={cat.id} value={cat.name}>
-              {cat.name}
-            </option>
-          ))}
-        </select>
-
-        {/* Forma de Pagamento */}
-        {!isPaymentMethodHidden && (
-          <select
-            value={filterPaymentMethod}
-            onChange={(e) => {
-              if (setFilterPaymentMethod) setFilterPaymentMethod(e.target.value)
-              fetchTransactions({ paymentMethod: e.target.value })
-            }}
-            className="bg-white border border-slate-300 hover:border-slate-400 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:border-[#2F68FE] focus:ring-1 focus:ring-[#2F68FE]/20 cursor-pointer shadow-2xs max-w-full"
-          >
-            <option value="">Todas as formas</option>
-            <option value="PIX">PIX</option>
-            <option value="Cartão de Débito">Débito</option>
-            <option value="Cartão de Crédito">Crédito</option>
-            <option value="Boleto">Boleto</option>
-            <option value="Transferência">Transferência</option>
-            <option value="Dinheiro">Dinheiro</option>
-            <option value="Outros">Outros</option>
-          </select>
-        )}
-
-        {/* Intervalo de Datas Compacto */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-700 bg-white border border-slate-300 rounded-lg px-2.5 py-1 shadow-2xs">
-          <input
-            type="date"
-            value={filterStartDate}
-            onChange={(e) => {
-              setFilterStartDate(e.target.value)
-              fetchTransactions({ startDate: e.target.value })
-            }}
-            className="bg-transparent text-xs font-medium text-slate-800 focus:outline-none cursor-pointer max-w-[108px]"
-            title="Data início"
-          />
-          <span className="text-slate-400 text-[11px] font-bold">-</span>
-          <input
-            type="date"
-            value={filterEndDate}
-            onChange={(e) => {
-              setFilterEndDate(e.target.value)
-              fetchTransactions({ endDate: e.target.value })
-            }}
-            className="bg-transparent text-xs font-medium text-slate-800 focus:outline-none cursor-pointer max-w-[108px]"
-            title="Data fim"
-          />
-        </div>
-
-        {/* Botão para limpar filtros */}
+          <SlidersHorizontal className="w-3.5 h-3.5" />
+          <span>Filtros</span>
+          {activeSecondaryCount > 0 && (
+            <span className="w-4 h-4 rounded-full bg-[#2F68FE] text-white text-[10px] flex items-center justify-center font-bold">
+              {activeSecondaryCount}
+            </span>
+          )}
+        </button>
         {isAnyFilterActive && (
           <button
+            type="button"
             onClick={handleClearAllFilters}
-            className="text-xs text-slate-700 hover:text-slate-950 font-bold px-2.5 py-1 hover:bg-slate-200/70 rounded-lg transition-colors ml-auto cursor-pointer border border-slate-300"
+            className="p-2 rounded-xl bg-[#F2F4F7] text-[#667085] hover:text-rose-500 border border-transparent transition-all shrink-0 cursor-pointer"
+            title="Limpar todos os filtros"
           >
-            Limpar filtros ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
+
+      {/* Linha 3: Filtros secundários colapsáveis */}
+      {showSecondaryFilters && (
+        <div className="pt-2 border-t border-[#EBEEF2] flex flex-wrap items-center gap-2 text-xs animate-in fade-in duration-150">
+          {/* Conta / Cartão */}
+          <select
+            value={filterAccount}
+            onChange={(e) => {
+              const newAccountId = e.target.value
+              setFilterAccount(newAccountId)
+              const targetAcc = accounts.find((a) => a.id === newAccountId)
+              const shouldHide = Boolean(
+                !targetAcc ||
+                  targetAcc.type === 'credit_card' ||
+                  targetAcc.type === 'debit_card' ||
+                  targetAcc.type === 'cash' ||
+                  targetAcc.type !== 'bank_account'
+              )
+              if (shouldHide && filterPaymentMethod) {
+                if (setFilterPaymentMethod) setFilterPaymentMethod('')
+                fetchTransactions({ accountId: newAccountId, paymentMethod: '' })
+              } else {
+                fetchTransactions({ accountId: newAccountId })
+              }
+            }}
+            className="bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-none cursor-pointer max-w-full flex-1 sm:flex-initial"
+          >
+            <option value="">Todas as contas / cartões</option>
+            {accounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name}{acc.institution ? ` • ${acc.institution}` : ''}
+              </option>
+            ))}
+          </select>
+
+          {/* Categoria */}
+          <select
+            value={filterCategory}
+            onChange={(e) => {
+              setFilterCategory(e.target.value)
+              fetchTransactions({ category: e.target.value })
+            }}
+            className="bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-none cursor-pointer max-w-full flex-1 sm:flex-initial"
+          >
+            <option value="">Todas as categorias</option>
+            {categoriesList.map((cat) => (
+              <option key={cat.id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Forma de Pagamento */}
+          {!isPaymentMethodHidden && (
+            <select
+              value={filterPaymentMethod}
+              onChange={(e) => {
+                if (setFilterPaymentMethod) setFilterPaymentMethod(e.target.value)
+                fetchTransactions({ paymentMethod: e.target.value })
+              }}
+              className="bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl px-2.5 py-1.5 text-xs text-[#0F172A] focus:outline-none cursor-pointer max-w-full flex-1 sm:flex-initial"
+            >
+              <option value="">Todas as formas</option>
+              <option value="PIX">PIX</option>
+              <option value="Cartão de Débito">Débito</option>
+              <option value="Cartão de Crédito">Crédito</option>
+              <option value="Boleto">Boleto</option>
+              <option value="Transferência">Transferência</option>
+              <option value="Dinheiro">Dinheiro</option>
+              <option value="Outros">Outros</option>
+            </select>
+          )}
+
+          {/* Intervalo de Datas Compacto */}
+          <div className="flex items-center gap-1.5 text-xs text-[#0F172A] bg-[#F2F4F7] border border-transparent rounded-xl px-2.5 py-1">
+            <input
+              type="date"
+              value={filterStartDate}
+              onChange={(e) => {
+                setFilterStartDate(e.target.value)
+                fetchTransactions({ startDate: e.target.value })
+              }}
+              className="bg-transparent text-xs font-normal text-[#0F172A] focus:outline-none cursor-pointer max-w-[108px]"
+              title="Data início"
+            />
+            <span className="text-[#98A2B3] text-[11px] font-bold">-</span>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={(e) => {
+                setFilterEndDate(e.target.value)
+                fetchTransactions({ endDate: e.target.value })
+              }}
+              className="bg-transparent text-xs font-normal text-[#0F172A] focus:outline-none cursor-pointer max-w-[108px]"
+              title="Data fim"
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

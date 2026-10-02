@@ -128,6 +128,7 @@ export function NewLaunchTab({
 
   // Drawer de Itens
   const [showItemsDrawer, setShowItemsDrawer] = useState<boolean>(false)
+  const [showMoreDetails, setShowMoreDetails] = useState<boolean>(false)
 
   // Modal de Zoom do Comprovante
   const [showImageZoom, setShowImageZoom] = useState<boolean>(false)
@@ -499,7 +500,7 @@ export function NewLaunchTab({
   return (
     <section className={`space-y-6 pb-12 ${className || ''}`}>
       {/* Cabeçalho */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#EBEEF2]">
+      <div className="hidden md:flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#EBEEF2]">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Novo Lançamento</h1>
           <p className="text-xs text-[#6B7280] mt-0.5">
@@ -677,6 +678,8 @@ export function NewLaunchTab({
               setReviewInstallmentTotal,
               reviewNotes,
               setReviewNotes,
+              showMoreDetails,
+              setShowMoreDetails,
               savingLaunch,
               handleDiscardLaunch,
               handleSaveFinalLaunch,

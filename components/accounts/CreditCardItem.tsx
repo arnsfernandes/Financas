@@ -78,209 +78,113 @@ export function CreditCardItem({
       ? false
       : contrastText === '#FFFFFF'
 
-  // Configuração de estilo visual por skin
-  let containerStyle: React.CSSProperties = {}
-  let borderClass = ''
-  let textClass = ''
-  let subtextClass = ''
-  let badgeClass = ''
-  let cyclePillClass = ''
-  let chipClass = ''
-
-  if (activeSkin === 'gradient') {
-    containerStyle = {
-      background: `linear-gradient(135deg, ${accentColor} 0%, color-mix(in srgb, ${accentColor} 70%, #000000) 100%)`,
-      backgroundColor: accentColor,
-    }
-    borderClass = 'border border-white/20'
-    textClass = isDarkSkin ? 'text-white' : 'text-[#111827]'
-    subtextClass = isDarkSkin ? 'text-white/90' : 'text-[#111827]/90'
-    badgeClass = isDarkSkin
-      ? 'bg-white/25 text-white border-white/30 font-semibold backdrop-blur-xs'
-      : 'bg-black/15 text-[#111827] border-black/25 font-semibold'
-    cyclePillClass = isDarkSkin
-      ? 'bg-black/30 text-white border-white/25 backdrop-blur-xs font-medium'
-      : 'bg-white/70 text-[#111827] border-black/15 font-medium'
-    chipClass = isDarkSkin ? 'border-white/40 text-white/70' : 'border-black/30 text-black/60'
-  } else if (activeSkin === 'solid') {
-    containerStyle = {
-      backgroundColor: accentColor,
-    }
-    borderClass = 'border border-black/15'
-    textClass = isDarkSkin ? 'text-white' : 'text-[#111827]'
-    subtextClass = isDarkSkin ? 'text-white/90' : 'text-[#111827]/90'
-    badgeClass = isDarkSkin
-      ? 'bg-white/25 text-white border-white/30 font-semibold backdrop-blur-xs'
-      : 'bg-black/15 text-[#111827] border-black/25 font-semibold'
-    cyclePillClass = isDarkSkin
-      ? 'bg-black/30 text-white border-white/25 backdrop-blur-xs font-medium'
-      : 'bg-white/70 text-[#111827] border-black/15 font-medium'
-    chipClass = isDarkSkin ? 'border-white/40 text-white/70' : 'border-black/30 text-black/60'
-  } else if (activeSkin === 'dark') {
-    containerStyle = {
-      background: `radial-gradient(ellipse 95% 85% at 90% 10%, color-mix(in srgb, ${accentColor} 40%, #0F172A) 0%, #0F172A 70%)`,
-      backgroundColor: '#0F172A',
-    }
-    borderClass = 'border border-slate-700'
-    textClass = 'text-white'
-    subtextClass = 'text-slate-200'
-    badgeClass = 'bg-slate-800 text-white border-slate-600 font-semibold'
-    cyclePillClass = 'bg-slate-900 text-slate-100 border-slate-700 font-medium'
-    chipClass = 'border-slate-600 text-slate-300'
-  } else if (activeSkin === 'light') {
-    containerStyle = {
-      background: `radial-gradient(ellipse 95% 85% at 90% 10%, color-mix(in srgb, ${accentColor} 15%, #FFFFFF) 0%, #FFFFFF 68%)`,
-      backgroundColor: '#FFFFFF',
-    }
-    borderClass = 'border border-[#EBEEF2]'
-    textClass = 'text-[#111827]'
-    subtextClass = 'text-[#374151]'
-    badgeClass = 'bg-slate-100 text-slate-900 border-slate-300 font-semibold'
-    cyclePillClass = 'bg-slate-50 text-slate-900 border-slate-200 font-medium'
-    chipClass = 'border-slate-400 text-slate-600'
-  } else {
-    // minimal
-    containerStyle = {
-      backgroundColor: '#FFFFFF',
-    }
-    borderClass = 'border border-[#E2E8F0]'
-    textClass = 'text-[#111827]'
-    subtextClass = 'text-[#374151]'
-    badgeClass = 'bg-purple-50 text-purple-800 border-purple-300 font-semibold'
-    cyclePillClass = 'bg-slate-50 text-slate-900 border-slate-200 font-medium'
-    chipClass = 'border-slate-400 text-slate-600'
-  }
+  // Estilo visual moderno de Apple Wallet com atmosfera escura
+  const baseDarkBg = '#141416'
+  const isInter = institution?.toLowerCase().includes('inter') || name?.toLowerCase().includes('inter')
+  const isNubank = institution?.toLowerCase().includes('nu') || name?.toLowerCase().includes('nu')
+  
+  // Gradiente atmosférico sofisticado com glow radial suave
+  const cardGradient = isInter
+    ? `radial-gradient(ellipse at 85% 15%, rgba(255, 122, 0, 0.45) 0%, rgba(255, 90, 0, 0.15) 45%, rgba(20, 20, 22, 0.95) 85%), linear-gradient(145deg, #1F1916 0%, #121214 100%)`
+    : isNubank
+    ? `radial-gradient(ellipse at 85% 15%, rgba(130, 10, 209, 0.45) 0%, rgba(100, 20, 180, 0.15) 45%, rgba(20, 20, 22, 0.95) 85%), linear-gradient(145deg, #1C1524 0%, #121214 100%)`
+    : `radial-gradient(ellipse at 85% 15%, color-mix(in srgb, ${accentColor} 45%, transparent) 0%, color-mix(in srgb, ${accentColor} 15%, transparent) 45%, rgba(20, 20, 22, 0.95) 85%), linear-gradient(145deg, #1A1A1E 0%, #121214 100%)`
 
   return (
     <div
       onClick={onClick}
-      style={containerStyle}
-      className={`group relative rounded-2xl p-5 transition-all select-none overflow-hidden flex flex-col justify-between gap-3 min-h-[200px] ${borderClass} ${
-        onClick ? 'cursor-pointer hover:shadow-lg hover:-translate-y-0.5' : ''
-      } ${inactive ? 'opacity-65 grayscale-[20%]' : ''}`}
+      style={{ background: cardGradient }}
+      className={`group relative rounded-[22px] p-4 sm:p-5 transition-all select-none overflow-hidden flex flex-col justify-between gap-3 border border-white/[0.06] shadow-lg ${
+        onClick ? 'cursor-pointer active:scale-[0.98] transition-transform duration-100' : ''
+      } ${inactive ? 'opacity-40 grayscale-[40%]' : ''}`}
     >
-      {/* Filete decorativo sutil para skin minimalista */}
-      {activeSkin === 'minimal' && (
-        <div
-          className="h-1 w-full absolute top-0 left-0"
-          style={{ backgroundColor: accentColor }}
-        />
-      )}
-
-      {/* TOPO DO CARTÃO */}
-      <div>
-        <div className="flex items-start justify-between gap-3 mb-2">
-          {/* Logo e Instituição */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            <InstitutionLogo
-              institution={institution}
-              accountName={name}
-              accountType="credit_card"
-              customLogo={customLogo}
-              color={color}
-              size="md"
-            />
-            <div className="min-w-0">
-              <h3 className={`font-bold text-sm tracking-tight truncate ${textClass}`}>
-                {name || 'Nome do Cartão'}
-              </h3>
-              {institution && (
-                <p className={`text-[11px] font-medium truncate ${subtextClass}`}>
-                  {institution}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Símbolo Contactless (aproximação) + Badge "Crédito" */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span
-              title="Cartão por aproximação"
-              className={`p-0.5 opacity-80 ${textClass}`}
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M8.5 16.5a5 5 0 0 1 7 0" />
-                <path d="M6 13.5a9 9 0 0 1 12 0" />
-                <path d="M3.5 10.5a13 13 0 0 1 17 0" />
-              </svg>
-            </span>
-
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badgeClass}`}>
-              Crédito
-            </span>
-
-            {inactive && (
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/30 text-white/90 border border-white/20">
-                Inativa
-              </span>
-            )}
+      {/* 1. LINHA SUPERIOR DO CARTÃO */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <InstitutionLogo
+            institution={institution}
+            accountName={name}
+            accountType="credit_card"
+            customLogo={customLogo}
+            color={color}
+            size="md"
+          />
+          <div className="min-w-0">
+            <h3 className="font-medium text-sm text-white/95 truncate">
+              {name || 'Cartão'}
+            </h3>
+            <p className="text-[11px] text-white/45 font-light truncate">
+              {institution || 'Cartão de Crédito'}
+            </p>
           </div>
         </div>
 
-        {/* Detalhe sutil de Chip EMV físico sem dados fictícios */}
-        <div className="flex items-center justify-between mt-1 mb-3">
-          <div
-            className={`w-7 h-5 rounded-[4px] border flex items-center justify-center shrink-0 ${chipClass}`}
-            title="Chip de segurança"
-          >
-            <div className="w-4 h-3 border border-current rounded-xs grid grid-cols-2 gap-px p-px">
-              <div className="border-r border-b border-current" />
-              <div className="border-b border-current" />
-              <div className="border-r border-current" />
-              <div />
-            </div>
+        {/* Chip "Crédito" translúcido + Chevron */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.08] backdrop-blur-md border border-white/[0.06] text-[11px] font-medium text-white/80">
+            <span>Crédito</span>
+            <ChevronRight className="w-3 h-3 text-white/40" />
           </div>
-        </div>
-
-        {/* VALOR PRINCIPAL: FATURA ATUAL */}
-        <div className="space-y-0.5">
-          <span className={`text-[10px] font-semibold uppercase tracking-wider block ${subtextClass}`}>
-            Fatura Atual
-          </span>
-          <div className={`text-xl font-bold tracking-tight ${textClass}`}>
-            {formatBRL(currentMonthExpenses)}
-          </div>
+          {inactive && (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-white/60">
+              Inativa
+            </span>
+          )}
         </div>
       </div>
 
-      {/* RODAPÉ DO CARTÃO: PARCELAS E CICLO */}
-      <div className="space-y-2 pt-2">
-        <div className={`flex items-center justify-between text-xs ${subtextClass}`}>
-          <span>Parcelas futuras:</span>
-          <span className={`font-semibold ${textClass}`}>
-            {formatBRL(futureInstallmentsTotal)}
-            {futureInstallmentsCount > 0 && (
-              <span className="text-[10px] opacity-75 ml-1">
-                ({futureInstallmentsCount}x)
-              </span>
-            )}
+      {/* 2. CORPO DO CARTÃO: FATURA ATUAL & DADOS COMPLEMENTARES */}
+      <div className="pt-2 flex items-baseline justify-between gap-4">
+        <div className="space-y-0.5">
+          <span className="text-[11px] font-light text-white/50 block">
+            Fatura atual
           </span>
+          <div className="text-2xl sm:text-3xl font-light tracking-tight text-white tabular-nums">
+            {formatBRL(currentMonthExpenses)}
+          </div>
         </div>
 
-        {/* Bloco discreto com Fechamento e Vencimento */}
-        <div
-          className={`flex items-center justify-between text-[11px] px-2.5 py-1 rounded-xl border ${cyclePillClass}`}
-        >
-          <span className="opacity-80">Ciclo da fatura:</span>
-          <span className="font-semibold">
-            Fecha dia {closingDay || 5} • Vence dia {dueDay || 15}
-          </span>
+        {futureInstallmentsTotal > 0 && (
+          <div className="text-right space-y-0.5">
+            <span className="text-[11px] font-light text-white/40 block">
+              Parcelas futuras
+            </span>
+            <div className="text-xs sm:text-sm font-light text-white/80 tabular-nums">
+              {formatBRL(futureInstallmentsTotal)}
+            </div>
+            {futureInstallmentsCount > 0 && (
+              <span className="text-[10px] text-white/35 block">
+                {futureInstallmentsCount} {futureInstallmentsCount === 1 ? 'parcela' : 'parcelas'}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. RODAPÉ DO CARTÃO: CICLO & VER DETALHES */}
+      <div className="pt-2 border-t border-white/[0.06] flex items-center justify-between text-xs text-white/50">
+        <div className="flex items-center gap-1.5 text-[11px] font-light">
+          <svg
+            className="w-3.5 h-3.5 text-white/40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          <span>Fecha dia {closingDay || 5} • Vence dia {dueDay || 15}</span>
         </div>
 
         {!isPreview && (
-          <div className={`flex items-center justify-end text-[11px] font-semibold pt-0.5 ${subtextClass} group-hover:opacity-100 transition-opacity`}>
-            <span className="inline-flex items-center gap-0.5">
-              Ver detalhes
-              <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-            </span>
+          <div className="inline-flex items-center gap-0.5 text-[11px] font-medium text-white/70 group-hover:text-white transition-colors">
+            <span>Ver detalhes</span>
+            <ChevronRight className="w-3 h-3 text-white/40 group-hover:translate-x-0.5 transition-transform" />
           </div>
         )}
       </div>

@@ -80,8 +80,8 @@ export function LaunchInputCard({
           const file = e.dataTransfer.files?.[0]
           if (file) handleFileSelected(file)
         }}
-        className={`bg-white border rounded-2xl p-5 shadow-xs space-y-4 transition-all ${
-          isDraggingFile ? 'border-[#2F68FE] ring-2 ring-[#2F68FE]/20 bg-[#2F68FE]/5' : 'border-[#EBEEF2]'
+        className={`bg-white border rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4 transition-all ${
+          isDraggingFile ? 'border-[#2F68FE] ring-2 ring-[#2F68FE]/20 bg-[#EBF2FF]/30' : 'border-[#EBEEF2]'
         }`}
       >
         {/* Inputs de arquivo/câmera ocultos */}
@@ -109,31 +109,31 @@ export function LaunchInputCard({
 
         {/* Campo Principal: "O que aconteceu?" */}
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-[#111827] block">O que aconteceu?</label>
+          <label className="text-xs font-medium text-[#0F172A] block">O que aconteceu?</label>
           <textarea
             value={quickTextInput}
             onChange={(e) => setQuickTextInput(e.target.value)}
             disabled={interpreting}
             rows={3}
             placeholder="Ex.: Comprei R$ 480 no cartão Inter em 4x"
-            className="w-full bg-[#F9FAFB] border border-[#E5E7EB] hover:border-[#D1D5DB] focus:bg-white rounded-xl p-3 text-xs sm:text-sm text-[#111827] placeholder-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#2F68FE]/20 focus:border-[#2F68FE] transition-all resize-none disabled:opacity-50 leading-relaxed"
+            className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl p-3 text-xs sm:text-sm text-[#0F172A] placeholder:text-[#98A2B3] focus:outline-none transition-all resize-none disabled:opacity-50 leading-relaxed"
           />
         </div>
 
         {/* Badge de Arquivo Anexado (se selecionado) */}
         {selectedFile && (
-          <div className="flex items-center justify-between p-2.5 bg-[#F4F5F7] border border-[#E5E7EB] rounded-xl text-xs">
+          <div className="flex items-center justify-between p-2.5 bg-[#F2F4F7] border border-transparent rounded-xl text-xs">
             <div className="flex items-center gap-2 min-w-0">
               <FileText className="w-4 h-4 text-[#2F68FE] shrink-0" />
-              <span className="font-medium text-[#111827] truncate">{selectedFile.name}</span>
-              <span className="text-[10px] text-[#6B7280] shrink-0">
+              <span className="font-normal text-[#0F172A] truncate">{selectedFile.name}</span>
+              <span className="text-[10px] text-[#667085] shrink-0">
                 ({(selectedFile.size / 1024).toFixed(0)} KB)
               </span>
             </div>
             <button
               type="button"
               onClick={handleRemoveFile}
-              className="p-1 text-[#9CA3AF] hover:text-red-600 rounded-lg hover:bg-white transition-colors"
+              className="p-1 text-[#98A2B3] hover:text-rose-500 rounded-lg transition-colors cursor-pointer"
               title="Remover arquivo"
             >
               <X className="w-3.5 h-3.5" />
@@ -147,9 +147,9 @@ export function LaunchInputCard({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={interpreting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-xs font-medium text-[#4B5563] hover:text-[#111827] shadow-2xs transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#EBEEF2] bg-white hover:bg-[#F2F4F7] text-xs font-medium text-[#475467] transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
           >
-            <Paperclip className="w-3.5 h-3.5 text-[#6B7280]" />
+            <Paperclip className="w-3.5 h-3.5 text-[#667085]" />
             <span>Anexar arquivo</span>
           </button>
 
@@ -157,9 +157,9 @@ export function LaunchInputCard({
             type="button"
             onClick={() => cameraInputRef.current?.click()}
             disabled={interpreting}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-xs font-medium text-[#4B5563] hover:text-[#111827] shadow-2xs transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#EBEEF2] bg-white hover:bg-[#F2F4F7] text-xs font-medium text-[#475467] transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
           >
-            <Camera className="w-3.5 h-3.5 text-[#6B7280]" />
+            <Camera className="w-3.5 h-3.5 text-[#667085]" />
             <span>Tirar foto</span>
           </button>
 
@@ -168,10 +168,10 @@ export function LaunchInputCard({
               type="button"
               onClick={() => setShowAccountSelector(true)}
               disabled={interpreting}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#E5E7EB] bg-white hover:bg-[#F9FAFB] text-xs font-medium text-[#4B5563] hover:text-[#111827] shadow-2xs transition-all disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#EBEEF2] bg-white hover:bg-[#F2F4F7] text-xs font-medium text-[#475467] transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
             >
-              <Plus className="w-3.5 h-3.5 text-[#6B7280]" />
-              <span>Vincular conta/cartão</span>
+              <Plus className="w-3.5 h-3.5 text-[#667085]" />
+              <span>Vincular conta</span>
             </button>
           ) : null}
         </div>
@@ -197,7 +197,7 @@ export function LaunchInputCard({
                 setSelectedAccountId('')
                 setShowAccountSelector(false)
               }}
-              className="p-2 text-[#9CA3AF] hover:text-[#111827] rounded-xl hover:bg-[#F4F5F7] transition-colors"
+              className="p-2 text-[#98A2B3] hover:text-[#0F172A] rounded-xl hover:bg-[#F2F4F7] transition-colors cursor-pointer"
               title="Remover vínculo de conta"
             >
               <X className="w-4 h-4" />
@@ -211,7 +211,7 @@ export function LaunchInputCard({
             type="button"
             disabled={interpreting || (!quickTextInput.trim() && !selectedFile)}
             onClick={handleUnifiedSubmit}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] disabled:opacity-50 text-white font-semibold text-xs transition-all shadow-sm active:scale-[0.99]"
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-[#2F68FE] hover:bg-[#2554D0] active:scale-[0.99] text-white font-medium text-xs transition-all disabled:bg-slate-200 disabled:text-slate-400 cursor-pointer disabled:cursor-not-allowed shadow-2xs touch-manipulation min-h-[42px]"
           >
             {interpreting ? (
               <>
@@ -230,7 +230,7 @@ export function LaunchInputCard({
             type="button"
             onClick={handleStartManual}
             disabled={interpreting}
-            className="text-xs text-[#6B7280] hover:text-[#111827] underline underline-offset-4 decoration-[#D1D5DB] hover:decoration-[#111827] transition-colors font-medium py-1"
+            className="text-xs text-[#667085] hover:text-[#0F172A] transition-colors font-medium py-1 cursor-pointer"
           >
             Preencher manualmente
           </button>

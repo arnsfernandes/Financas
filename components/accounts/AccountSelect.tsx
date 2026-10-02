@@ -127,9 +127,6 @@ export function AccountSelect({
                       {selectedAccount.institution}
                     </span>
                   )}
-                  <span className="text-[10px] text-[#4B5563] shrink-0 font-medium">
-                    ({getAccountTypeLabel(selectedAccount.type)})
-                  </span>
                 </>
               )
             })()
@@ -190,9 +187,6 @@ export function AccountSelect({
                           {acc.institution}
                         </span>
                       )}
-                      <span className="text-[10px] text-[#9CA3AF] shrink-0">
-                        ({getAccountTypeLabel(acc.type)})
-                      </span>
                     </div>
                     {isSelected && <Check className="w-3.5 h-3.5 text-[#2F68FE] shrink-0" />}
                   </button>

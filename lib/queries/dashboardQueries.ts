@@ -393,7 +393,36 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
   }
 
   if (effectivePaymentMethod) {
-    txQuery = txQuery.ilike('payment_method', `%${effectivePaymentMethod}%`)
+    const pm = effectivePaymentMethod.trim()
+    const isCreditCard =
+      pm === 'credit_card' ||
+      pm.toLowerCase().includes('crédito') ||
+      pm.toLowerCase().includes('credito') ||
+      pm.toLowerCase().includes('cartão') ||
+      pm.toLowerCase().includes('cartao') ||
+      pm.toLowerCase() === 'card'
+
+    if (isCreditCard) {
+      const { data: ccAccounts } = await supabase
+        .from('accounts')
+        .select('id')
+        .eq('type', 'credit_card')
+      const ccIds = (ccAccounts || []).map((a) => a.id)
+
+      const conditions = [
+        `payment_method.ilike.%crédito%`,
+        `payment_method.ilike.%credito%`,
+        `payment_method.ilike.%cartão%`,
+        `payment_method.ilike.%cartao%`,
+        `payment_method.eq.credit_card`,
+      ]
+      if (ccIds.length > 0) {
+        conditions.push(`account_id.in.(${ccIds.join(',')})`)
+      }
+      txQuery = txQuery.or(conditions.join(','))
+    } else {
+      txQuery = txQuery.ilike('payment_method', `%${pm}%`)
+    }
   }
 
   const { data: allTxs, error } = await txQuery

@@ -24,6 +24,7 @@ import { CreateReserveModal } from './CreateReserveModal'
 import { PayInvoiceModal } from './PayInvoiceModal'
 import type { InvoicePayment } from '@/lib/schema'
 import { getCardInvoiceDates } from '@/lib/billingCycles'
+import { formatBRL } from '@/lib/formatters'
 
 export interface AccountsTabProps {
   accounts: AccountWithStats[]
@@ -598,229 +599,194 @@ export function AccountsTab({
     }
   }
 
-  return (
-    <section className="space-y-10">
-      {/* ======================================================== */}
-      {/* SEÇÃO 1: CONTAS E CARTÕES                                */}
-      {/* ======================================================== */}
-      <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#EBEEF2]">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight text-[#111827]">Contas e Cartões</h1>
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#F4F5F7] text-[#6B7280]">
-                {accounts.length} {accounts.length === 1 ? 'cadastrado' : 'cadastrados'}
-              </span>
-            </div>
-            <p className="text-xs text-[#6B7280] mt-1">
-              Gerencie onde o dinheiro entra/sai e os cartões usados nos lançamentos.
-            </p>
-          </div>
+  const creditCards = accounts.filter((a) => a.type === 'credit_card')
+  const bankAndCashAccounts = accounts.filter((a) => a.type !== 'credit_card')
 
-          <button
-            type="button"
-            onClick={() => {
-              setModalOpen(true)
-              setAccountError('')
-            }}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white text-xs font-semibold shadow-sm transition-all self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nova Conta / Cartão</span>
-          </button>
+  return (
+    <section className="space-y-6 pb-12 max-w-2xl mx-auto">
+      {/* ======================================================== */}
+      {/* 1. TOPO DA TELA (MOBILE NATIVE HEADER)                   */}
+      {/* ======================================================== */}
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-normal tracking-tight text-[#0F172A]">
+            Contas
+          </h1>
+          <p className="text-xs text-[#667085] mt-0.5 font-normal">
+            Gerencie seus cartões, contas e reservas
+          </p>
         </div>
 
-        {/* Lista de Cards de Contas e Cartões */}
-        {loadingAccounts && accounts.length === 0 ? (
-          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-10 text-center text-xs text-[#9CA3AF]">
-            <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-[#2F68FE]" />
-            Carregando contas e cartões...
+        {/* Botão + circular discreto */}
+        <button
+          type="button"
+          onClick={() => {
+            setModalOpen(true)
+            setAccountError('')
+          }}
+          className="w-9 h-9 rounded-full bg-white hover:bg-[#F2F4F7] active:scale-95 border border-[#EBEEF2] flex items-center justify-center text-[#0F172A] transition-all cursor-pointer shrink-0 shadow-2xs"
+          title="Nova Conta / Cartão"
+        >
+          <Plus className="w-4 h-4 stroke-[2]" />
+        </button>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 2. SEÇÃO CARTÕES DE CRÉDITO                              */}
+      {/* ======================================================== */}
+      <div className="space-y-3">
+        <div className="px-0.5">
+          <h2 className="text-base font-medium text-[#0F172A] tracking-tight">
+            Cartões de crédito
+          </h2>
+        </div>
+
+        {loadingAccounts && creditCards.length === 0 ? (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-6 text-center text-xs text-[#98A2B3]">
+            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1.5 text-[#2F68FE]" />
+            Carregando cartões...
           </div>
-        ) : accounts.length === 0 ? (
-          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-10 text-center space-y-3">
-            <Wallet className="w-10 h-10 text-[#9CA3AF] mx-auto stroke-1" />
-            <h3 className="text-sm font-bold text-[#111827]">Nenhuma conta ou cartão cadastrado</h3>
-            <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
-              Cadastre suas contas bancárias, cartões de crédito ou dinheiro para organizar suas movimentações.
+        ) : creditCards.length === 0 ? (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-5 text-center space-y-2">
+            <p className="text-xs text-[#98A2B3] font-normal">
+              Nenhum cartão de crédito cadastrado.
             </p>
             <button
               type="button"
-              onClick={() => setModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#2F68FE] hover:bg-[#2557D6] text-white text-xs font-semibold shadow-sm transition-all"
+              onClick={() => {
+                setFormType('credit_card')
+                setModalOpen(true)
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#EBF2FF] hover:bg-[#DCE7FE] text-[#2F68FE] text-xs font-medium transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>Cadastrar primeira conta</span>
+              <span>Adicionar Cartão</span>
+            </button>
+          </div>
+        ) : creditCards.length === 1 ? (
+          <div>
+            <CreditCardItem
+              key={creditCards[0].id}
+              id={creditCards[0].id}
+              name={creditCards[0].name}
+              institution={creditCards[0].institution}
+              color={creditCards[0].color}
+              skin={(creditCards[0] as any).skin}
+              customLogo={creditCards[0].custom_logo}
+              currentMonthExpenses={creditCards[0].currentMonthExpenses}
+              futureInstallmentsTotal={creditCards[0].futureInstallmentsTotal}
+              futureInstallmentsCount={creditCards[0].futureInstallmentsCount}
+              closingDay={creditCards[0].closing_day}
+              dueDay={creditCards[0].due_day}
+              inactive={creditCards[0].active === false}
+              onClick={() => handleOpenDetails(creditCards[0])}
+            />
+          </div>
+        ) : (
+          <div
+            data-testid="credit-cards-carousel"
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {creditCards.map((acc) => (
+              <div
+                key={acc.id}
+                className="w-[88%] sm:w-[360px] shrink-0 snap-start"
+              >
+                <CreditCardItem
+                  id={acc.id}
+                  name={acc.name}
+                  institution={acc.institution}
+                  color={acc.color}
+                  skin={(acc as any).skin}
+                  customLogo={acc.custom_logo}
+                  currentMonthExpenses={acc.currentMonthExpenses}
+                  futureInstallmentsTotal={acc.futureInstallmentsTotal}
+                  futureInstallmentsCount={acc.futureInstallmentsCount}
+                  closingDay={acc.closing_day}
+                  dueDay={acc.due_day}
+                  inactive={acc.active === false}
+                  onClick={() => handleOpenDetails(acc)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* 3. SEÇÃO CONTAS (LISTA COMPACTA UNIFICADA)               */}
+      {/* ======================================================== */}
+      <div className="space-y-3">
+        <div className="px-0.5">
+          <h2 className="text-base font-medium text-[#0F172A] tracking-tight">
+            Contas
+          </h2>
+        </div>
+
+        {loadingAccounts && bankAndCashAccounts.length === 0 ? (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-6 text-center text-xs text-[#98A2B3]">
+            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1.5 text-[#2F68FE]" />
+            Carregando contas...
+          </div>
+        ) : bankAndCashAccounts.length === 0 ? (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-5 text-center space-y-2">
+            <p className="text-xs text-[#98A2B3] font-normal">
+              Nenhuma conta cadastrada.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setFormType('bank_account')
+                setModalOpen(true)
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#EBF2FF] hover:bg-[#DCE7FE] text-[#2F68FE] text-xs font-medium transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Adicionar Conta</span>
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {accounts.map((acc) => {
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl overflow-hidden divide-y divide-[#F2F4F7] shadow-2xs">
+            {bankAndCashAccounts.map((acc) => {
               const isInactive = acc.active === false
-              const isCreditCard = acc.type === 'credit_card'
-
-              if (isCreditCard) {
-                return (
-                  <CreditCardItem
-                    key={acc.id}
-                    id={acc.id}
-                    name={acc.name}
-                    institution={acc.institution}
-                    color={acc.color}
-                    skin={(acc as any).skin}
-                    customLogo={acc.custom_logo}
-                    currentMonthExpenses={acc.currentMonthExpenses}
-                    futureInstallmentsTotal={acc.futureInstallmentsTotal}
-                    futureInstallmentsCount={acc.futureInstallmentsCount}
-                    closingDay={acc.closing_day}
-                    dueDay={acc.due_day}
-                    inactive={isInactive}
-                    onClick={() => handleOpenDetails(acc)}
-                  />
-                )
-              }
-
-              const isBankAccount = acc.type === 'bank_account'
               const isCash = acc.type === 'cash'
-
-              const instInfo = getInstitutionInfo(acc.institution || acc.name)
-              const cardAccentColor =
-                acc.color ||
-                instInfo?.primaryColor ||
-                (isCash ? '#10B981' : '#2F68FE')
-
-              const badge = getAccountTypeBadge(acc.type)
+              const typeLabel = isCash ? 'Dinheiro' : acc.institution || 'Conta corrente'
+              const txCount = acc.transactionCount || 0
 
               return (
                 <div
                   key={acc.id}
                   onClick={() => handleOpenDetails(acc)}
-                  className={`group bg-white border rounded-2xl p-5 transition-all cursor-pointer flex flex-col justify-between gap-4 relative overflow-hidden hover:shadow-md hover:border-[#2F68FE]/40 ${
-                    isInactive ? 'opacity-65 border-[#E5E7EB] bg-[#FAFAFA]' : 'border-[#EBEEF2]'
+                  className={`flex items-center justify-between p-3.5 sm:px-4 hover:bg-[#F2F4F7]/70 cursor-pointer transition-colors group active:scale-[0.99] min-h-[60px] ${
+                    isInactive ? 'opacity-40' : ''
                   }`}
                 >
-                  <div
-                    className="h-1 w-full absolute top-0 left-0"
-                    style={{ backgroundColor: cardAccentColor }}
-                  />
-
-                  <div>
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <InstitutionLogo
-                          institution={acc.institution}
-                          accountName={acc.name}
-                          accountType={acc.type}
-                          customLogo={acc.custom_logo}
-                          color={acc.color}
-                          size="lg"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-sm text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
-                              {acc.name}
-                            </h3>
-                          </div>
-                          {acc.institution && (
-                            <p className="text-xs text-[#6B7280] font-medium truncate mt-0.5">
-                              {acc.institution}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.className}`}
-                        >
-                          {badge.label}
-                        </span>
-
-                        {isInactive && (
-                          <span className="text-[10px] font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-full shadow-2xs">
-                            Inativa
-                          </span>
-                        )}
-                      </div>
+                  {/* Lado Esquerdo: Ícone / Logo + Nome + Subtexto */}
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <InstitutionLogo
+                      institution={acc.institution}
+                      accountName={acc.name}
+                      accountType={acc.type}
+                      customLogo={acc.custom_logo}
+                      color={acc.color}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <h3 className="font-normal text-sm text-[#0F172A] group-hover:text-[#2F68FE] transition-colors truncate">
+                        {acc.name}
+                      </h3>
+                      <p className="text-[11px] text-[#667085] font-normal truncate mt-0.5">
+                        {typeLabel} • {txCount} {txCount === 1 ? 'lançamento' : 'lançamentos'}
+                      </p>
                     </div>
-
-                    {isBankAccount && (
-                      <div className="mt-4 pt-3 border-t border-[#F4F5F7] space-y-2">
-                        <div>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] block">
-                            Movimentações
-                          </span>
-                          <div className="text-lg font-bold text-[#111827] tracking-tight mt-0.5">
-                            {acc.transactionCount || 0}{' '}
-                            <span className="text-xs font-normal text-[#4B5563]">
-                              {(acc.transactionCount || 0) === 1
-                                ? 'lançamento vinculado'
-                                : 'lançamentos vinculados'}
-                            </span>
-                          </div>
-                        </div>
-
-                        {acc.institution && (
-                          <div className="flex items-center justify-between text-xs text-[#4B5563]">
-                            <span>Instituição:</span>
-                            <span className="font-semibold text-[#111827] truncate max-w-[170px]">
-                              {acc.institution}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {isCash && (
-                      <div className="mt-4 pt-3 border-t border-[#F4F5F7] space-y-2">
-                        <div>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] block">
-                            Movimentações
-                          </span>
-                          <div className="text-lg font-bold text-[#111827] tracking-tight mt-0.5">
-                            {acc.transactionCount || 0}{' '}
-                            <span className="text-xs font-normal text-[#4B5563]">
-                              {(acc.transactionCount || 0) === 1
-                                ? 'lançamento em espécie'
-                                : 'lançamentos em espécie'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs text-[#4B5563]">
-                          <span>Identificação:</span>
-                          <span className="font-semibold text-[#111827]">Dinheiro em espécie</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {!isCreditCard && !isBankAccount && !isCash && (
-                      <div className="mt-4 pt-3 border-t border-[#F4F5F7] space-y-2">
-                        <div>
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#6B7280] block">
-                            Movimentações
-                          </span>
-                          <div className="text-lg font-bold text-[#111827] tracking-tight mt-0.5">
-                            {acc.transactionCount || 0}{' '}
-                            <span className="text-xs font-normal text-[#4B5563]">
-                              {(acc.transactionCount || 0) === 1
-                                ? 'lançamento vinculado'
-                                : 'lançamentos vinculados'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
 
-                  <div className="pt-2 flex items-center justify-between text-xs text-[#4B5563] group-hover:text-[#2F68FE] transition-colors border-t border-[#F9FAFB]">
-                    <span className="text-[11px] font-medium text-[#4B5563]">
-                      {acc.transactionCount || 0}{' '}
-                      {(acc.transactionCount || 0) === 1 ? 'lançamento' : 'lançamentos'}
+                  {/* Lado Direito: Saldo/Resumo + Chevron */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs sm:text-sm font-normal tabular-nums text-[#0F172A]">
+                      {acc.type === 'cash' ? 'R$ 0,00' : 'R$ 0,00'}
                     </span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-[11px] text-[#2F68FE]">
-                      Ver detalhes
-                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-[#98A2B3]" />
                   </div>
                 </div>
               )
@@ -830,20 +796,80 @@ export function AccountsTab({
       </div>
 
       {/* ======================================================== */}
-      {/* SEÇÃO 2: RESERVAS (DINHEIRO GUARDADO)                    */}
+      {/* 4. SEÇÃO RESERVAS (LISTA COMPACTA UNIFICADA)             */}
       {/* ======================================================== */}
-      <ReservesSection
-        reserves={reserves}
-        loadingReserves={loadingReserves}
-        totalSaved={totalSaved}
-        reservesError={reservesError}
-        fetchReserves={fetchReserves}
-        onOpenCreateModal={() => {
-          setReserveModalOpen(true)
-          setReserveError('')
-        }}
-        onOpenReserveDetails={handleOpenReserveDetails}
-      />
+      <div className="space-y-3">
+        <div className="px-0.5">
+          <h2 className="text-base font-medium text-[#0F172A] tracking-tight">
+            Reservas
+          </h2>
+        </div>
+
+        {loadingReserves && reserves.length === 0 ? (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-6 text-center text-xs text-[#98A2B3]">
+            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-1.5 text-[#10B981]" />
+            Carregando reservas...
+          </div>
+        ) : reserves.length === 0 ? (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl p-5 text-center space-y-2">
+            <p className="text-xs text-[#98A2B3] font-normal">
+              Nenhuma reserva cadastrada.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setReserveModalOpen(true)
+                setReserveError('')
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#EBF2FF] hover:bg-[#DCE7FE] text-[#2F68FE] text-xs font-medium transition-all cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Criar Reserva</span>
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white border border-[#EBEEF2] rounded-2xl overflow-hidden divide-y divide-[#F2F4F7] shadow-2xs">
+            {reserves.map((res) => {
+              const hasTarget = Boolean(res.targetAmount && res.targetAmount > 0)
+              const percentage = hasTarget
+                ? Math.min(100, Math.round(((res.currentBalance || 0) / res.targetAmount!) * 100))
+                : null
+              const subtitle = hasTarget ? `Meta: ${formatBRL(res.targetAmount!)} (${percentage}%)` : 'Reserva • Sem meta'
+
+              return (
+                <div
+                  key={res.id}
+                  onClick={() => handleOpenReserveDetails(res)}
+                  className="flex items-center justify-between p-3.5 sm:px-4 hover:bg-[#F2F4F7]/70 cursor-pointer transition-colors group active:scale-[0.99] min-h-[60px]"
+                >
+                  {/* Lado Esquerdo: Ícone + Nome + Subtítulo */}
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <div className="w-9 h-9 rounded-full bg-[#E8FDF3] text-[#10B981] flex items-center justify-center shrink-0">
+                      <Wallet className="w-4 h-4 stroke-[1.8]" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-normal text-sm text-[#0F172A] group-hover:text-[#2F68FE] transition-colors truncate">
+                        {res.name}
+                      </h3>
+                      <p className="text-[11px] text-[#667085] font-normal truncate mt-0.5">
+                        {subtitle}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Lado Direito: Saldo Guardado + Chevron */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs sm:text-sm font-normal tabular-nums text-[#0F172A]">
+                      {formatBRL(res.currentBalance || 0)}
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-[#98A2B3]" />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ======================================================== */}
       {/* DRAWER DE DETALHES DA CONTA / CARTÃO                     */}

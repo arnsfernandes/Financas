@@ -246,38 +246,38 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
   const inactiveCount = categories.filter((c) => c.type === activeType && !c.active).length
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-12">
+    <div className="space-y-4 max-w-2xl mx-auto pb-12">
       {/* 1. Header com Título e Ação de Nova Categoria */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#EBEEF2]">
+      <div className="flex items-center justify-between gap-4 pb-2 border-b border-[#EBEEF2]">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[#111827]">
+          <h1 className="text-2xl font-normal tracking-tight text-[#0F172A]">
             Categorias
           </h1>
-          <p className="text-xs text-[#6B7280] mt-0.5">
-            Organize suas despesas e receitas com categorias estruturadas e personalizáveis.
+          <p className="text-xs text-[#667085] mt-0.5 font-normal">
+            {categories.filter((c) => c.type === activeType && c.active).length} ativas no período
           </p>
         </div>
 
         <button
           onClick={handleOpenCreate}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#2F68FE] hover:bg-[#1D52EB] text-white text-xs font-semibold rounded-xl shadow-copilot-button transition-all hover:scale-[1.01] active:scale-[0.99] shrink-0"
+          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-[#2F68FE] text-white text-xs font-medium rounded-xl shadow-2xs transition-all hover:bg-[#2554D0] active:scale-95 shrink-0 cursor-pointer"
         >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
+          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
           <span>Nova Categoria</span>
         </button>
       </div>
 
       {/* Alerta de Erro */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl px-4 py-3 text-xs font-medium flex items-center justify-between gap-2 shadow-sm animate-in fade-in duration-200">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl px-4 py-3 text-xs font-medium flex items-center justify-between gap-2 shadow-2xs animate-in fade-in duration-200">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
             <span>{error}</span>
           </div>
           <button
             type="button"
             onClick={() => fetchCategoriesData()}
-            className="text-xs font-semibold text-red-700 hover:text-red-900 underline ml-auto"
+            className="text-xs font-semibold text-red-700 hover:text-red-900 underline ml-auto cursor-pointer"
           >
             Tentar novamente
           </button>
@@ -285,29 +285,29 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
       )}
 
       {/* 2. Barra de Controle: Tabs Tipo, Pesquisa e Switch Inativos */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 border border-slate-200/80 rounded-2xl shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 sm:p-3 border border-[#EBEEF2] rounded-2xl shadow-2xs">
         {/* Toggle Despesas vs Receitas */}
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-300/80 shrink-0">
+        <div className="flex bg-[#F2F4F7] p-1 rounded-xl border border-transparent shrink-0">
           <button
             onClick={() => setActiveType('expense')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+            className={`flex items-center justify-center gap-1.5 flex-1 sm:flex-initial px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
               activeType === 'expense'
-                ? 'bg-white text-rose-700 shadow-2xs border border-slate-200'
-                : 'text-slate-700 hover:text-slate-950 font-semibold'
+                ? 'bg-white text-[#0F172A] shadow-2xs font-semibold'
+                : 'text-[#667085] hover:text-[#0F172A]'
             }`}
           >
-            <TrendingDown className="w-3.5 h-3.5 stroke-[2.5]" />
+            <TrendingDown className="w-3.5 h-3.5 text-rose-500" />
             <span>Despesas ({categories.filter((c) => c.type === 'expense' && c.active).length})</span>
           </button>
           <button
             onClick={() => setActiveType('income')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all ${
+            className={`flex items-center justify-center gap-1.5 flex-1 sm:flex-initial px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
               activeType === 'income'
-                ? 'bg-white text-emerald-800 shadow-2xs border border-slate-200'
-                : 'text-slate-700 hover:text-slate-950 font-semibold'
+                ? 'bg-white text-[#0F172A] shadow-2xs font-semibold'
+                : 'text-[#667085] hover:text-[#0F172A]'
             }`}
           >
-            <TrendingUp className="w-3.5 h-3.5 stroke-[2.5]" />
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             <span>Receitas ({categories.filter((c) => c.type === 'income' && c.active).length})</span>
           </button>
         </div>
@@ -315,18 +315,18 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
         {/* Busca e Filtro de Inativas */}
         <div className="flex items-center gap-2 flex-1 max-w-md">
           <div className="relative w-full">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
+            <Search className="w-3.5 h-3.5 text-[#98A2B3] absolute left-3 top-2.5" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar categoria..."
-              className="w-full bg-white border border-slate-300 hover:border-slate-400 focus:border-[#2F68FE] rounded-xl pl-9 pr-8 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2F68FE]/20 transition-all shadow-2xs"
+              className="w-full bg-[#F2F4F7] border border-transparent hover:border-[#E4E7EC] focus:border-[#2F68FE] focus:bg-white rounded-xl pl-9 pr-8 py-1.5 text-xs text-[#0F172A] placeholder:text-[#98A2B3] focus:outline-none transition-all"
             />
             {search && (
               <button
                 onClick={() => setSearch('')}
-                className="absolute right-2.5 top-2.5 text-[#9CA3AF] hover:text-[#111827]"
+                className="absolute right-2.5 top-2.5 text-[#98A2B3] hover:text-[#0F172A]"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -336,16 +336,16 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
           <button
             type="button"
             onClick={() => setShowInactive(!showInactive)}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-medium whitespace-nowrap transition-all ${
+            className={`px-3 py-1.5 rounded-xl border text-xs font-medium whitespace-nowrap transition-all cursor-pointer ${
               showInactive
-                ? 'bg-[#EBF2FF] border-[#2F68FE] text-[#2F68FE] font-semibold'
-                : 'bg-white border-[#E5E7EB] text-[#6B7280] hover:text-[#111827]'
+                ? 'bg-[#EBF2FF] border-[#2F68FE]/30 text-[#2F68FE] font-semibold'
+                : 'bg-[#F2F4F7] border-transparent text-[#667085] hover:text-[#0F172A]'
             }`}
             title="Mostrar ou ocultar categorias desativadas"
           >
-            {showInactive ? 'Todas' : 'Somente Ativas'}
+            {showInactive ? 'Todas' : 'Ativas'}
             {inactiveCount > 0 && !showInactive && (
-              <span className="ml-1.5 text-[10px] bg-[#F4F5F7] px-1.5 py-0.2 rounded-full text-[#6B7280]">
+              <span className="ml-1 text-[10px] bg-[#E4E7EC] px-1.5 py-0.2 rounded-full text-[#667085]">
                 +{inactiveCount}
               </span>
             )}
@@ -355,18 +355,18 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
 
       {/* 3. Lista de Categorias em Grid Compacto */}
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-[#9CA3AF] text-sm gap-2">
-          <Loader2 className="w-5 h-5 animate-spin text-[#2F68FE]" />
+        <div className="flex items-center justify-center py-20 text-[#98A2B3] text-xs gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-[#2F68FE]" />
           <span>Carregando categorias...</span>
         </div>
       ) : displayedCategories.length === 0 ? (
         <div className="bg-white border border-[#EBEEF2] rounded-2xl p-12 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-[#F4F5F7] text-[#9CA3AF] mx-auto flex items-center justify-center">
+          <div className="w-12 h-12 rounded-2xl bg-[#F2F4F7] text-[#98A2B3] mx-auto flex items-center justify-center">
             <FolderOpen className="w-6 h-6" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-sm font-bold text-[#111827]">Nenhuma categoria encontrada</h3>
-            <p className="text-xs text-[#6B7280]">
+            <h3 className="text-sm font-medium text-[#0F172A]">Nenhuma categoria encontrada</h3>
+            <p className="text-xs text-[#667085]">
               {search
                 ? `Nenhuma categoria corresponde à busca "${search}".`
                 : 'Crie uma nova categoria para começar a organizar seus lançamentos.'}
@@ -374,14 +374,14 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
           </div>
           <button
             onClick={handleOpenCreate}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#2F68FE] bg-[#EBF2FF] hover:bg-[#DDE9FF] rounded-xl transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-[#2F68FE] bg-[#EBF2FF] hover:bg-[#DCE7FE] rounded-xl transition-colors cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>Criar Nova Categoria</span>
           </button>
         </div>
       ) : (
-        <div className="bg-white border border-[#EBEEF2] rounded-2xl shadow-xs overflow-hidden divide-y divide-[#F4F5F7]">
+        <div className="bg-white border border-[#EBEEF2] rounded-2xl overflow-hidden divide-y divide-[#F2F4F7] shadow-2xs">
           {displayedCategories.map((cat) => {
             const IconComponent = getCategoryLucideIcon(cat.icon)
             const isInactive = !cat.active
@@ -390,71 +390,63 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
               <div
                 key={cat.id}
                 onClick={() => onCategorySelect?.(cat.id, cat.name, cat.type)}
-                className={`flex items-center justify-between p-3.5 sm:px-5 hover:bg-[#F9FAFB] cursor-pointer transition-colors group ${
-                  isInactive ? 'opacity-60 bg-[#FAFAFA]' : ''
+                className={`flex items-center justify-between p-3 sm:p-3.5 sm:px-4 hover:bg-[#F2F4F7]/70 cursor-pointer transition-colors group active:scale-[0.99] ${
+                  isInactive ? 'opacity-40' : ''
                 }`}
               >
-                {/* Lado Esquerdo: Ícone + Nome + Badge Sistema + Status */}
-                <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                {/* Lado Esquerdo: Ícone + Nome + Quantidade de lançamentos */}
+                <div className="flex items-center gap-3 min-w-0 pr-2">
                   <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-white shadow-2xs transition-transform group-hover:scale-105"
+                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white transition-transform group-hover:scale-105 shadow-2xs"
                     style={{ backgroundColor: cat.color || '#2F68FE' }}
                   >
-                    <IconComponent className="w-4 h-4 stroke-[2.5]" />
+                    <IconComponent className="w-4 h-4 stroke-[2]" />
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs sm:text-sm font-semibold text-[#111827] group-hover:text-[#2F68FE] transition-colors truncate">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs sm:text-sm font-normal text-[#0F172A] group-hover:text-[#2F68FE] transition-colors truncate">
                         {cat.name}
                       </span>
 
-                      {cat.is_system ? (
-                        <span className="text-[10px] font-semibold text-[#374151] bg-[#F4F5F7] px-1.5 py-0.2 rounded border border-[#D1D5DB]">
-                          Padrão
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-[#1D4ED8] bg-[#EBF2FF] px-1.5 py-0.2 rounded border border-[#BFDBFE]">
+                      {!cat.is_system && (
+                        <span className="text-[9px] font-medium text-violet-700 bg-violet-50 px-1.5 py-0.2 rounded border border-violet-200 hidden sm:inline-block">
                           Personalizada
                         </span>
                       )}
 
                       {isInactive && (
-                        <span className="text-[10px] font-bold text-gray-700 bg-gray-200 px-1.5 py-0.2 rounded border border-gray-300">
+                        <span className="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
                           Desativada
                         </span>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 text-[11px] text-[#4B5563] mt-0.5 font-medium">
+                    <div className="text-[10px] text-[#667085] font-normal">
                       <span>{cat.txCount || 0} {cat.txCount === 1 ? 'lançamento' : 'lançamentos'}</span>
-                      {periodData?.label && <span>no período ({periodData.label})</span>}
                     </div>
                   </div>
                 </div>
 
                 {/* Lado Direito: Total Movimentado + Ações (Editar, Ativar/Desativar) + Chevron */}
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                   <div className="text-right">
                     <span
-                      className={`text-xs sm:text-sm font-bold block ${
-                        cat.type === 'income' ? 'text-[#059669]' : 'text-[#111827]'
+                      className={`text-xs sm:text-sm font-normal tabular-nums block ${
+                        cat.type === 'income' ? 'text-[#10B981]' : 'text-[#0F172A]'
                       }`}
                     >
                       {formatBRL(cat.totalAmount || 0)}
                     </span>
-                    <span className="text-[10px] text-[#4B5563] font-medium">
-                      {periodData?.label ? 'no período' : 'total'}
-                    </span>
                   </div>
 
-                  {/* Ações em Hover */}
-                  <div className="flex items-center gap-1 pl-2 border-l border-[#EBEEF2]">
+                  {/* Ações */}
+                  <div className="flex items-center gap-0.5 pl-1.5 border-l border-[#EBEEF2]">
                     <button
                       type="button"
                       onClick={(e) => handleOpenEdit(cat, e)}
-                      className="p-1.5 rounded-lg text-[#6B7280] hover:text-[#111827] hover:bg-[#F4F5F7] transition-colors"
-                      title="Editar nome, ícone ou cor"
+                      className="p-1.5 rounded-lg text-[#98A2B3] hover:text-[#0F172A] hover:bg-[#F2F4F7] transition-colors cursor-pointer"
+                      title="Editar"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
                     </button>
@@ -463,23 +455,17 @@ export function CategoriesTab({ onCategorySelect, periodData }: CategoriesTabPro
                       type="button"
                       onClick={(e) => handleToggleActive(cat, e)}
                       disabled={cat.is_system && cat.normalized_name === 'outros'}
-                      className={`p-1.5 rounded-lg transition-colors ${
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                         cat.active
-                          ? 'text-[#6B7280] hover:text-amber-700 hover:bg-amber-50'
-                          : 'text-[#6B7280] hover:text-emerald-700 hover:bg-emerald-50'
-                      } ${cat.is_system && cat.normalized_name === 'outros' ? 'opacity-30 cursor-not-allowed' : ''}`}
-                      title={
-                        cat.is_system && cat.normalized_name === 'outros'
-                          ? 'Categoria obrigatória de fallback do sistema'
-                          : cat.active
-                          ? 'Desativar categoria'
-                          : 'Ativar categoria'
-                      }
+                          ? 'text-white/40 hover:text-amber-400 hover:bg-white/5'
+                          : 'text-white/40 hover:text-emerald-400 hover:bg-white/5'
+                      } ${cat.is_system && cat.normalized_name === 'outros' ? 'opacity-20 cursor-not-allowed' : ''}`}
+                      title={cat.active ? 'Desativar' : 'Ativar'}
                     >
                       <Power className="w-3.5 h-3.5" />
                     </button>
 
-                    <ChevronRight className="w-4 h-4 text-[#D1D5DB] group-hover:text-[#2F68FE] group-hover:translate-x-0.5 transition-all" />
+                    <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/60 group-hover:translate-x-0.5 transition-all" />
                   </div>
                 </div>
               </div>

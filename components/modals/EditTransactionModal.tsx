@@ -433,11 +433,10 @@ export function EditTransactionModal({
                     {localAccounts
                       .filter((a) => a.name?.trim().toLowerCase() !== 'pix')
                       .map((acc) => {
-                        const typeLabel = getAccountTypeLabel(acc.type)
                         const instSuffix = acc.institution ? ` • ${acc.institution}` : ''
                         return (
                           <option key={`acc:${acc.id}`} value={`acc:${acc.id}`}>
-                            {acc.name} ({typeLabel}{instSuffix})
+                            {acc.name}{instSuffix}
                           </option>
                         )
                       })}
