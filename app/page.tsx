@@ -36,20 +36,49 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false)
+  const [initialCardId, setInitialCardId] = useState<string | null>(null)
+  const [initialDueDate, setInitialDueDate] = useState<string | null>(null)
 
   // Hook Web Push notification prompt (solicitação única por gesto do usuário após abrir o PWA)
   usePwaPushPrompt(Boolean(isWebAuthenticated))
 
-  // Checa URL search params para atalhos PWA (ex: /?tab=new ou /?tab=transactions)
+  // Checa URL search params para atalhos e deep links de notificações PWA
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const tabParam = params.get('tab') as TabType | null
+      const cardIdParam = params.get('cardId')
+      const dueDateParam = params.get('dueDate')
+      const txIdParam = params.get('txId')
+
       if (tabParam && ['dashboard', 'transactions', 'accounts', 'categories', 'new'].includes(tabParam)) {
         setActiveTab(tabParam)
+      } else if (cardIdParam) {
+        setActiveTab('accounts')
+      } else if (txIdParam) {
+        setActiveTab('transactions')
+      }
+
+      if (cardIdParam) {
+        setInitialCardId(cardIdParam)
+        if (dueDateParam) setInitialDueDate(dueDateParam)
+      }
+
+      if (txIdParam) {
+        // Tenta buscar a transação diretamente para abrir o detalhe
+        fetchWithAuth(`/api/transactions/${txIdParam}`)
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.ok && data.transaction) {
+              setSelectedDrawerTx(data.transaction)
+            }
+          })
+          .catch(() => {
+            // Fallback: se a transação foi excluída ou não existe mais, permanece na listagem de transações
+          })
       }
     }
-  }, [])
+  }, [fetchWithAuth])
 
   // Checa autenticação inicial para navegação web direta
   useEffect(() => {
@@ -564,6 +593,12 @@ export default function Home() {
             loadingAccounts={loadingAccounts}
             fetchAccounts={fetchAccounts}
             navigateToTransactionsFiltered={navigateToTransactionsFiltered}
+            initialCardId={initialCardId}
+            initialDueDate={initialDueDate}
+            onClearInitialCard={() => {
+              setInitialCardId(null)
+              setInitialDueDate(null)
+            }}
           />
         )}
 

@@ -35,6 +35,9 @@ export interface AccountsTabProps {
     startDate?: string
     endDate?: string
   }) => void
+  initialCardId?: string | null
+  initialDueDate?: string | null
+  onClearInitialCard?: () => void
 }
 
 export function AccountsTab({
@@ -42,6 +45,9 @@ export function AccountsTab({
   loadingAccounts,
   fetchAccounts,
   navigateToTransactionsFiltered,
+  initialCardId,
+  initialDueDate,
+  onClearInitialCard,
 }: AccountsTabProps) {
   // Modal de Criação de Nova Conta / Cartão
   const [modalOpen, setModalOpen] = useState(false)
@@ -170,6 +176,20 @@ export function AccountsTab({
   useEffect(() => {
     fetchReserves()
   }, [fetchReserves])
+
+  // Auto-open card / invoice when initialCardId is provided
+  useEffect(() => {
+    if (!initialCardId || loadingAccounts || accounts.length === 0) return
+
+    const matched = accounts.find((a) => a.id === initialCardId)
+    if (matched) {
+      handleOpenDetails(matched)
+      if (onClearInitialCard) onClearInitialCard()
+    } else {
+      // Fallback: If card is not found or deleted, stay on accounts screen without crashing
+      if (onClearInitialCard) onClearInitialCard()
+    }
+  }, [initialCardId, loadingAccounts, accounts])
 
   // ------------------------------------------
   // Handlers para Contas

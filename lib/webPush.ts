@@ -183,13 +183,14 @@ export async function checkUserInvoicePushReminders(
           body,
           icon: '/icon-192.png',
           badge: '/icon-192.png',
-          url: '/?tab=accounts',
+          url: `/?tab=accounts&cardId=${inv.accountId}&dueDate=${inv.dueDate}`,
           tag: `invoice-${inv.accountId}-${inv.dueDate}`,
           data: {
             type: 'invoice',
             cardId: inv.accountId,
             dueDate: inv.dueDate,
             amount: inv.total,
+            url: `/?tab=accounts&cardId=${inv.accountId}&dueDate=${inv.dueDate}`,
           },
         },
       })
@@ -258,13 +259,14 @@ export async function checkUserRecurrencePushReminders(
         body,
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        url: '/?tab=transactions',
+        url: `/?tab=transactions&txId=${tx.id}`,
         tag: `recurrence-${tx.id}-${nextDate}`,
         data: {
           type: 'recurrence',
           transactionId: tx.id,
           date: nextDate,
           amount: tx.total,
+          url: `/?tab=transactions&txId=${tx.id}`,
         },
       },
     })

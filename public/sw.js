@@ -107,14 +107,16 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
 
-  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/'
+  const data = event.notification.data || {}
+  const targetPath = data.url || '/'
+  const targetUrl = new URL(targetPath, self.location.origin).href
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Check if there is already a window/tab open with the app
+      // Check if there is already a window/tab open with the app origin
       for (const client of windowClients) {
         if (client.url && 'focus' in client) {
-          if (targetUrl !== '/') {
+          if ('navigate' in client) {
             client.navigate(targetUrl)
           }
           return client.focus()
@@ -127,4 +129,5 @@ self.addEventListener('notificationclick', (event) => {
     })
   )
 })
+
 
