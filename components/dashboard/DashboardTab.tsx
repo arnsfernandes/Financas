@@ -13,7 +13,10 @@ import {
   Receipt,
   Smartphone,
   Banknote,
-  Sparkles,
+  ReceiptText,
+  PieChart,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from 'lucide-react'
 import type { Account, TransactionRecord } from '@/lib/schema'
 import type { DashboardSummary } from '@/lib/queries'
@@ -23,7 +26,6 @@ import { MonthPicker } from '@/components/ui/MonthPicker'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
 import { CategoryDetailPanel } from './CategoryDetailPanel'
 import { CashFlowDrawer } from './CashFlowDrawer'
-
 import { TransactionDetailModal } from '@/components/transactions/TransactionDetailModal'
 
 export interface DashboardTabProps {
@@ -73,12 +75,9 @@ export function DashboardTab({
   loadingDashboard,
   dashboardError,
   accounts,
-  periodType,
-  handlePeriodTypeChange,
   monthOffset,
   handleMonthNavigate,
   dashboardAccountId,
-  setDashboardAccountId,
   fetchDashboard,
   setFilterType,
   navigateToTransactionsFiltered,
@@ -239,312 +238,363 @@ export function DashboardTab({
   }
 
   return (
-    <section className="space-y-6 max-w-2xl mx-auto pb-12">
-      {/* 1. SELETOR DE PERÍODO (Estilo minimalista "Outubro 2026 ▾") */}
-      <div className="flex items-center justify-between">
-        <MonthPicker
-          monthOffset={monthOffset}
-          onSelectMonthOffset={(offset) => {
-            handleMonthNavigate(offset - monthOffset)
-          }}
-        />
+    <section className="space-y-6 max-w-6xl mx-auto pb-12 font-sans">
+      {/* 1. BARRA SUPERIOR: SELETOR DE PERÍODO & FILTROS RÁPIDOS */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center gap-2">
+          <MonthPicker
+            monthOffset={monthOffset}
+            onSelectMonthOffset={(offset) => {
+              handleMonthNavigate(offset - monthOffset)
+            }}
+          />
+        </div>
+
+        {/* Filtros rápidos: Tudo, Cartão, PIX, Dinheiro */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => handleSelectQuickFilter('all')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
+              quickFilter === 'all'
+                ? 'bg-[#2F68FE] text-white font-semibold shadow-xs'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60'
+            }`}
+          >
+            Tudo
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectQuickFilter('card')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
+              quickFilter === 'card'
+                ? 'bg-[#2F68FE] text-white font-semibold shadow-xs'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60'
+            }`}
+          >
+            <CreditCard className="w-3.5 h-3.5 stroke-[1.8]" />
+            <span>Cartão</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectQuickFilter('pix')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
+              quickFilter === 'pix'
+                ? 'bg-[#2F68FE] text-white font-semibold shadow-xs'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 2L2 12l10 10 10-10L12 2z" />
+              <path d="M12 6l-6 6 6 6 6-6-6-6z" />
+            </svg>
+            <span>PIX</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSelectQuickFilter('cash')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
+              quickFilter === 'cash'
+                ? 'bg-[#2F68FE] text-white font-semibold shadow-xs'
+                : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200/60'
+            }`}
+          >
+            <Banknote className="w-3.5 h-3.5 stroke-[1.8]" />
+            <span>Dinheiro</span>
+          </button>
+        </div>
       </div>
 
       {dashboardError && (
-        <div className="border border-red-200 bg-red-50 text-red-700 rounded-2xl px-4 py-2.5 text-xs flex items-center gap-2">
+        <div className="border border-red-200 bg-red-50 text-red-700 rounded-2xl px-4 py-3 text-xs flex items-center gap-2.5 shadow-xs">
           <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-          <span>{dashboardError}</span>
+          <span className="font-medium">{dashboardError}</span>
         </div>
       )}
 
       {loadingDashboard && !dashboardData ? (
-        <div className="text-center py-16 text-[#98A2B3] text-xs font-normal animate-pulse">
-          Carregando finanças…
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 text-sm font-medium animate-pulse shadow-xs">
+          Carregando informações financeiras…
         </div>
       ) : !dashboardData ? (
-        <div className="text-center py-16 text-[#98A2B3] text-xs font-normal">
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-12 text-center text-slate-400 text-sm font-medium shadow-xs">
           Nenhum dado encontrado para o período.
         </div>
       ) : (
         <>
-          {/* 2. BLOCO PRINCIPAL DO PERÍODO (Saldo, Entradas e Gastos unificados) */}
-          <div className="space-y-3">
-            <div>
-              <span className="text-xs font-normal text-[#667085] block">
-                Saldo do período
-              </span>
-              <div className="text-4xl sm:text-5xl font-light tracking-tight text-[#0F172A] tabular-nums mt-1 -ml-0.5">
-                {formatBRL(dashboardData.metrics?.balance ?? 0)}
-              </div>
-            </div>
-
-            {/* Entradas e Gastos Lado a Lado integrados */}
-            <div className="flex items-center gap-8 pt-2">
-              <div
-                onClick={() => handleOpenDrawer('income')}
-                className="cursor-pointer group"
-                title="Ver entradas do período"
-              >
-                <span className="text-[11px] font-normal text-[#667085] block">
-                  Entradas
-                </span>
-                <span className="text-sm sm:text-base font-normal text-[#10B981] tabular-nums tracking-tight block mt-0.5">
-                  {formatBRL(dashboardData.metrics?.totalIncome ?? 0)}
-                </span>
-              </div>
-
-              <div className="h-6 w-px bg-slate-200" />
-
-              <div
-                onClick={() => handleOpenDrawer('expense')}
-                className="cursor-pointer group"
-                title="Ver gastos do período"
-              >
-                <span className="text-[11px] font-normal text-[#667085] block">
-                  Gastos
-                </span>
-                <span className="text-sm sm:text-base font-normal text-[#F04438] tabular-nums tracking-tight block mt-0.5">
-                  {formatBRL(dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. FILTRO RÁPIDO DO PERÍODO (Pills: Tudo, Cartão, PIX, Dinheiro) */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
-            <button
-              type="button"
-              onClick={() => handleSelectQuickFilter('all')}
-              className={`px-4 py-2 rounded-2xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
-                quickFilter === 'all'
-                  ? 'bg-[#EBF2FF] text-[#2F68FE] font-semibold'
-                  : 'bg-[#F2F4F7] text-[#667085] hover:text-[#0F172A]'
-              }`}
-            >
-              Tudo
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectQuickFilter('card')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
-                quickFilter === 'card'
-                  ? 'bg-[#EBF2FF] text-[#2F68FE] font-semibold'
-                  : 'bg-[#F2F4F7] text-[#667085] hover:text-[#0F172A]'
-              }`}
-            >
-              <CreditCard className="w-3.5 h-3.5 stroke-[1.8]" />
-              <span>Cartão</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectQuickFilter('pix')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
-                quickFilter === 'pix'
-                  ? 'bg-[#EBF2FF] text-[#2F68FE] font-semibold'
-                  : 'bg-[#F2F4F7] text-[#667085] hover:text-[#0F172A]'
-              }`}
-            >
-              <svg className="w-3.5 h-3.5 stroke-[1.8]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M12 2L2 12l10 10 10-10L12 2z" />
-                <path d="M12 6l-6 6 6 6 6-6-6-6z" />
-              </svg>
-              <span>PIX</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectQuickFilter('cash')}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-2xl text-xs font-medium transition-all shrink-0 cursor-pointer ${
-                quickFilter === 'cash'
-                  ? 'bg-[#EBF2FF] text-[#2F68FE] font-semibold'
-                  : 'bg-[#F2F4F7] text-[#667085] hover:text-[#0F172A]'
-              }`}
-            >
-              <Banknote className="w-3.5 h-3.5 stroke-[1.8]" />
-              <span>Dinheiro</span>
-            </button>
-          </div>
-
-          {/* 4. ÚLTIMOS LANÇAMENTOS (Lista Leve e Limpa) */}
-          <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-medium text-[#0F172A] tracking-tight">
-                Últimos lançamentos
-              </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setFilterType('all')
-                  navigateToTransactionsFiltered({
-                    startDate: dashboardData.period.startDate,
-                    endDate: dashboardData.period.endDate,
-                    paymentMethod: quickFilter === 'card' ? 'credit_card' : quickFilter === 'pix' ? 'PIX' : quickFilter === 'cash' ? 'Dinheiro' : undefined,
-                  })
-                }}
-                className="inline-flex items-center gap-0.5 text-xs text-[#667085] hover:text-[#0F172A] transition-colors"
-              >
-                <span>Ver todos</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {recentTransactions.length === 0 ? (
-              <div className="text-center py-6 text-[#98A2B3] text-xs">
-                Nenhum lançamento recente encontrado.
-              </div>
-            ) : (
+          {/* 2. CARD HERO PRINCIPAL (Saldo, Entradas e Gastos com alto contraste e profundidade) */}
+          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] transition-all">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              {/* Saldo Principal */}
               <div className="space-y-1">
-                {recentTransactions.slice(0, 5).map((tx: any) => {
-                  const isIncome = tx.type === 'income'
-                  const title = tx.canonical_vendors?.canonical_name || tx.vendor || (isIncome ? 'Receita' : 'Despesa')
-                  const catName = tx.categories?.name || tx.category || 'Geral'
-                  const paymentMethod = tx.accounts?.name || tx.payment_method || 'PIX'
-                  const visual = getCategoryVisual(title + ' ' + catName)
-                  const IconComp = visual.icon
-
-                  // Formatar data discreta
-                  let dateLabel = ''
-                  if (tx.date) {
-                    const txDate = new Date(tx.date + 'T00:00:00')
-                    const today = new Date()
-                    const yesterday = new Date(today)
-                    yesterday.setDate(yesterday.getDate() - 1)
-
-                    if (txDate.toDateString() === today.toDateString()) {
-                      dateLabel = 'Hoje'
-                    } else if (txDate.toDateString() === yesterday.toDateString()) {
-                      dateLabel = 'Ontem'
-                    } else {
-                      dateLabel = txDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })
-                    }
-                  }
-
-                  return (
-                    <div
-                      key={tx.id}
-                      onClick={() => setSelectedHomeTx(tx)}
-                      className="flex items-center justify-between py-2.5 px-1 hover:bg-slate-100/60 rounded-2xl transition-colors cursor-pointer group active:scale-[0.99]"
-                    >
-                      {/* Lado Esquerdo: Ícone colorido em círculo pastel + Título + Categoria/Forma */}
-                      <div className="flex items-center gap-3 min-w-0 pr-2">
-                        <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: visual.bg, color: visual.color }}
-                        >
-                          <IconComp className="w-4 h-4 stroke-[2]" />
-                        </div>
-
-                        <div className="min-w-0">
-                          <h3 className="font-normal text-sm text-[#0F172A] group-hover:text-[#2F68FE] transition-colors truncate">
-                            {title}
-                          </h3>
-                          <p className="text-[11px] text-[#667085] truncate font-normal mt-0.5">
-                            {catName} • {paymentMethod}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Lado Direito: Valor + Data discreta */}
-                      <div className="text-right shrink-0">
-                        <span
-                          className={`text-sm font-normal tabular-nums block ${
-                            isIncome ? 'text-[#10B981]' : 'text-[#0F172A]'
-                          }`}
-                        >
-                          {isIncome ? '+ ' : '- '}
-                          {formatBRL(Number(tx.total))}
-                        </span>
-                        {dateLabel && (
-                          <span className="text-[10px] text-[#98A2B3] block font-light">
-                            {dateLabel}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
+                  Saldo do período
+                </span>
+                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 tabular-nums">
+                  {formatBRL(dashboardData.metrics?.balance ?? 0)}
+                </div>
               </div>
-            )}
+
+              {/* Blocos de Entradas e Gastos com Cards Interativos */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 lg:min-w-[420px]">
+                {/* Card Entradas */}
+                <div
+                  onClick={() => handleOpenDrawer('income')}
+                  className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/70 rounded-2xl p-4 transition-all group cursor-pointer shadow-2xs hover:shadow-xs flex items-center justify-between gap-3"
+                  title="Clique para ver extrato de entradas"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <ArrowDownLeft className="w-5 h-5 stroke-[2.5]" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-emerald-900/70 block">
+                        Entradas
+                      </span>
+                      <span className="text-base sm:text-lg font-bold text-emerald-700 tabular-nums tracking-tight block">
+                        {formatBRL(dashboardData.metrics?.totalIncome ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-emerald-500/60 group-hover:text-emerald-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </div>
+
+                {/* Card Gastos */}
+                <div
+                  onClick={() => handleOpenDrawer('expense')}
+                  className="bg-rose-50/70 hover:bg-rose-50 border border-rose-200/70 rounded-2xl p-4 transition-all group cursor-pointer shadow-2xs hover:shadow-xs flex items-center justify-between gap-3"
+                  title="Clique para ver extrato de gastos"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <ArrowUpRight className="w-5 h-5 stroke-[2.5]" />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold text-rose-900/70 block">
+                        Gastos
+                      </span>
+                      <span className="text-base sm:text-lg font-bold text-rose-700 tabular-nums tracking-tight block">
+                        {formatBRL(dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0)}
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-rose-500/60 group-hover:text-rose-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* 5. ONDE VOCÊ GASTOU (Lista Compacta com Barras Finas e Cores Suaves) */}
-          <div className="space-y-3 pt-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-medium text-[#0F172A] tracking-tight">
-                Onde você gastou
-              </h2>
-              <button
-                type="button"
-                onClick={onNavigateToCategories}
-                className="inline-flex items-center gap-0.5 text-xs text-[#667085] hover:text-[#0F172A] transition-colors cursor-pointer"
-              >
-                <span>Ver todos</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+          {/* 3. GRID DESKTOP EM 2 COLUNAS: ÚLTIMOS LANÇAMENTOS + ONDE VOCÊ GASTOU */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* COLUNA 1 (7 Colunas no Desktop): ÚLTIMOS LANÇAMENTOS */}
+            <div className="lg:col-span-7 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+              <div>
+                {/* Cabeçalho do Card */}
+                <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-[#EBF2FF] text-[#2F68FE] flex items-center justify-center shrink-0">
+                      <ReceiptText className="w-4 h-4 stroke-[2.2]" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                        Últimos lançamentos
+                      </h2>
+                      <p className="text-[11px] font-normal text-slate-500">
+                        Atividades recentes deste período
+                      </p>
+                    </div>
+                  </div>
 
-            {(!dashboardData.topCategories || dashboardData.topCategories.length === 0) ? (
-              <div className="text-center py-6 text-[#98A2B3] text-xs">
-                Nenhuma categoria registrada no período.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {dashboardData.topCategories.slice(0, 5).map((cat, i) => {
-                  const totalSpent = dashboardData.metrics.totalExpenses || 1
-                  const pct = cat.percentage ?? Number(((cat.total / totalSpent) * 100).toFixed(1))
-                  const visual = getCategoryVisual(cat.category)
-                  const IconComp = visual.icon
-                  const barColors = ['#3B82F6', '#0EA5E9', '#F59E0B', '#EC4899', '#8B5CF6']
-                  const activeColor = barColors[i % barColors.length]
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterType('all')
+                      navigateToTransactionsFiltered({
+                        startDate: dashboardData.period.startDate,
+                        endDate: dashboardData.period.endDate,
+                        paymentMethod: quickFilter === 'card' ? 'credit_card' : quickFilter === 'pix' ? 'PIX' : quickFilter === 'cash' ? 'Dinheiro' : undefined,
+                      })
+                    }}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <span>Ver todos</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
 
-                  return (
-                    <div
-                      key={i}
-                      onClick={() => handleOpenCategoryDetail(cat)}
-                      className="py-1 cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div
-                            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: visual.bg, color: visual.color }}
-                          >
-                            <IconComp className="w-4 h-4 stroke-[2]" />
+                {/* Lista de Transações Recentes */}
+                {recentTransactions.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 text-xs font-medium">
+                    Nenhum lançamento registrado no período.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {recentTransactions.slice(0, 6).map((tx: any) => {
+                      const isIncome = tx.type === 'income'
+                      const title = tx.canonical_vendors?.canonical_name || tx.vendor || (isIncome ? 'Receita' : 'Despesa')
+                      const catName = tx.categories?.name || tx.category || 'Geral'
+                      const paymentMethod = tx.accounts?.name || tx.payment_method || 'PIX'
+                      const visual = getCategoryVisual(title + ' ' + catName)
+                      const IconComp = visual.icon
+
+                      // Formatar data relativa clara
+                      let dateLabel = ''
+                      if (tx.date) {
+                        const txDate = new Date(tx.date + 'T00:00:00')
+                        const today = new Date()
+                        const yesterday = new Date(today)
+                        yesterday.setDate(yesterday.getDate() - 1)
+
+                        if (txDate.toDateString() === today.toDateString()) {
+                          dateLabel = 'Hoje'
+                        } else if (txDate.toDateString() === yesterday.toDateString()) {
+                          dateLabel = 'Ontem'
+                        } else {
+                          dateLabel = txDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={tx.id}
+                          onClick={() => setSelectedHomeTx(tx)}
+                          className="flex items-center justify-between py-3 px-2.5 -mx-2.5 hover:bg-slate-50/90 rounded-2xl transition-all cursor-pointer group active:scale-[0.99]"
+                        >
+                          {/* Lado Esquerdo: Ícone + Título + Categoria/Conta */}
+                          <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                            <div
+                              className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform"
+                              style={{ backgroundColor: visual.bg, color: visual.color }}
+                            >
+                              <IconComp className="w-4 h-4 stroke-[2]" />
+                            </div>
+
+                            <div className="min-w-0">
+                              <h3 className="font-semibold text-sm text-slate-900 group-hover:text-[#2F68FE] transition-colors truncate">
+                                {title}
+                              </h3>
+                              <p className="text-xs text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5">
+                                <span>{catName}</span>
+                                <span className="text-slate-300">•</span>
+                                <span className="text-slate-400">{paymentMethod}</span>
+                              </p>
+                            </div>
                           </div>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2 mb-1.5">
-                              <span className="text-sm font-normal text-[#0F172A] truncate">
+                          {/* Lado Direito: Valor + Data */}
+                          <div className="text-right shrink-0">
+                            <span
+                              className={`text-sm sm:text-base font-bold tabular-nums tracking-tight block ${
+                                isIncome ? 'text-emerald-600' : 'text-slate-900'
+                              }`}
+                            >
+                              {isIncome ? '+ ' : '- '}
+                              {formatBRL(Number(tx.total))}
+                            </span>
+                            {dateLabel && (
+                              <span className="text-xs text-slate-400 block font-medium mt-0.5">
+                                {dateLabel}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* COLUNA 2 (5 Colunas no Desktop): ONDE VOCÊ GASTOU */}
+            <div className="lg:col-span-5 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+              <div>
+                {/* Cabeçalho do Card */}
+                <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                      <PieChart className="w-4 h-4 stroke-[2.2]" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                        Onde você gastou
+                      </h2>
+                      <p className="text-[11px] font-normal text-slate-500">
+                        Distribuição por categoria
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={onNavigateToCategories}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <span>Categorias</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Lista de Categorias */}
+                {(!dashboardData.topCategories || dashboardData.topCategories.length === 0) ? (
+                  <div className="text-center py-10 text-slate-400 text-xs font-medium">
+                    Nenhuma despesa registrada no período.
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {dashboardData.topCategories.slice(0, 5).map((cat, i) => {
+                      const totalSpent = dashboardData.metrics.totalExpenses || 1
+                      const pct = cat.percentage ?? Number(((cat.total / totalSpent) * 100).toFixed(1))
+                      const visual = getCategoryVisual(cat.category)
+                      const IconComp = visual.icon
+                      const barColors = ['#2F68FE', '#0EA5E9', '#F59E0B', '#EC4899', '#8B5CF6']
+                      const activeColor = barColors[i % barColors.length]
+
+                      return (
+                        <div
+                          key={i}
+                          onClick={() => handleOpenCategoryDetail(cat)}
+                          className="py-2.5 px-3 -mx-3 hover:bg-slate-50/90 rounded-2xl transition-all cursor-pointer group active:scale-[0.99]"
+                        >
+                          <div className="flex items-center justify-between gap-3 mb-2">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <div
+                                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs"
+                                style={{ backgroundColor: visual.bg, color: visual.color }}
+                              >
+                                <IconComp className="w-3.5 h-3.5 stroke-[2]" />
+                              </div>
+                              <span className="text-sm font-semibold text-slate-900 group-hover:text-[#2F68FE] transition-colors truncate">
                                 {cat.category}
                               </span>
-                              <div className="text-right shrink-0">
-                                <span className="text-sm font-normal text-[#0F172A] tabular-nums block">
-                                  {formatBRL(cat.total)}
-                                </span>
-                              </div>
                             </div>
 
-                            {/* Barra fina horizontal proporcional */}
-                            <div className="w-full h-1 bg-[#F2F4F7] rounded-full overflow-hidden flex items-center">
-                              <div
-                                className="h-full rounded-full transition-all duration-300"
-                                style={{
-                                  width: `${Math.min(100, Math.max(3, pct))}%`,
-                                  backgroundColor: activeColor,
-                                }}
-                              />
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-sm font-bold text-slate-900 tabular-nums">
+                                {formatBRL(cat.total)}
+                              </span>
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 tabular-nums">
+                                {pct}%
+                              </span>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="text-[11px] text-[#98A2B3] font-light min-w-[36px] text-right">
-                          {pct}%
+                          {/* Barra horizontal suave e moderna */}
+                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-300"
+                              style={{
+                                width: `${Math.min(100, Math.max(3, pct))}%`,
+                                backgroundColor: activeColor,
+                              }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </>
       )}

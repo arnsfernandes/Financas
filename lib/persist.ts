@@ -16,6 +16,7 @@ export interface PersistInput {
   originalExtractedData?: Record<string, any> | null
   allowDuplicate?: boolean
   isUserModifiedCategory?: boolean
+  userId?: string | null
 }
 
 export class DuplicateTransactionError extends Error {
@@ -283,6 +284,9 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
         effectiveReviewStatus = 'needs_review'
       }
 
+      // Resolve user_id for row insertion (defaults to owner if not specified)
+      const userId = input.userId || input.receipt.user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
+
       // Build array of all transactions to insert in a single batch
       const allTxRowsToInsert: any[] = []
 
@@ -292,6 +296,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
           const isPrimary = inst.installmentCurrent === (firstInstallmentCurrent || 1)
           allTxRowsToInsert.push({
             id: isPrimary ? id : generateUUID(),
+            user_id: userId,
             account_id: input.receipt.account_id || null,
             category_id: categoryId,
             vendor_id: vendorId,
@@ -333,6 +338,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
         // Single transaction or appending to existing group
         allTxRowsToInsert.push({
           id,
+          user_id: userId,
           account_id: input.receipt.account_id || null,
           category_id: categoryId,
           vendor_id: vendorId,
@@ -403,6 +409,7 @@ export async function save(input: PersistInput, prepared?: PreparedRows): Promis
 
             return {
               transaction_id: id,
+              user_id: userId,
               product_id: productId,
               description: item.description,
               normalized_name: normalizeItemName(item.description),

@@ -15,7 +15,7 @@ export function isPaymentMethodAccount(acc: { name?: string | null; institution?
 /**
  * List accounts from Supabase (defaults to active accounts)
  */
-export async function listAccounts(options: { activeOnly?: boolean; includePaymentMethodAccounts?: boolean } = { activeOnly: false, includePaymentMethodAccounts: true }): Promise<Account[]> {
+export async function listAccounts(options: { activeOnly?: boolean; includePaymentMethodAccounts?: boolean; userId?: string } = { activeOnly: false, includePaymentMethodAccounts: true }): Promise<Account[]> {
   const supabase = getSupabaseClient()
   if (!supabase) {
     return [
@@ -26,6 +26,9 @@ export async function listAccounts(options: { activeOnly?: boolean; includePayme
   }
 
   let query = supabase.from('accounts').select('*').order('name', { ascending: true })
+  if (options.userId) {
+    query = query.eq('user_id', options.userId)
+  }
   if (options.activeOnly) {
     query = query.eq('active', true)
   }
@@ -56,6 +59,7 @@ export async function listAccounts(options: { activeOnly?: boolean; includePayme
  * Create a new account in Supabase
  */
 export async function createAccount(input: {
+  userId?: string | null
   name: string
   type: AccountType
   institution?: string | null
@@ -71,11 +75,13 @@ export async function createAccount(input: {
   const custom_logo = input.custom_logo || null
   const color = input.color || null
   const skin = input.skin || null
+  const userId = input.userId || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
 
   const supabase = getSupabaseClient()
   if (!supabase) {
     return {
       id: 'mock-account-id',
+      user_id: userId,
       name: input.name,
       type: input.type,
       institution: input.institution || null,
@@ -91,6 +97,7 @@ export async function createAccount(input: {
   const { data, error } = await supabase
     .from('accounts')
     .insert({
+      user_id: userId,
       name: input.name.trim(),
       type: input.type,
       institution: input.institution?.trim() || null,
@@ -237,7 +244,7 @@ export async function getAccountDetailsWithStats(
   return accountWithStats
 }
 
-export async function listAccountsWithStats(options: { activeOnly?: boolean; includePaymentMethodAccounts?: boolean } = { activeOnly: false, includePaymentMethodAccounts: true }): Promise<AccountWithStats[]> {
+export async function listAccountsWithStats(options: { activeOnly?: boolean; includePaymentMethodAccounts?: boolean; userId?: string } = { activeOnly: false, includePaymentMethodAccounts: true }): Promise<AccountWithStats[]> {
   const supabase = getSupabaseClient()
   if (!supabase) {
     return [
@@ -248,6 +255,9 @@ export async function listAccountsWithStats(options: { activeOnly?: boolean; inc
   }
 
   let query = supabase.from('accounts').select('*').order('name', { ascending: true })
+  if (options.userId) {
+    query = query.eq('user_id', options.userId)
+  }
   if (options.activeOnly) {
     query = query.eq('active', true)
   }
@@ -274,9 +284,14 @@ export async function listAccountsWithStats(options: { activeOnly?: boolean; inc
     futureInstallmentsCount: 0,
   }))
 
-  const { data: txs, error: txError } = await supabase
+  let txQuery = supabase
     .from('transactions')
     .select('id, account_id, type, total, date, installment_group_id, installment_total, installment_current, installment_amount, payment_method')
+  if (options.userId) {
+    txQuery = txQuery.eq('user_id', options.userId)
+  }
+
+  const { data: txs, error: txError } = await txQuery
 
   if (txError) {
     console.warn('Could not query transactions for account stats:', txError.message)

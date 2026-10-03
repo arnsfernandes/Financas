@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const reserves = await getReserves()
+    const reserves = await getReserves(auth.userId)
     const totalSaved = reserves.reduce((acc, r) => acc + (Number(r.currentBalance) || 0), 0)
     return NextResponse.json({ ok: true, reserves, totalSaved })
   } catch (e) {
@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
     }
 
     const reserve = await createReserve({
+      userId: auth.userId,
       name: body.name.trim(),
       initialBalance: body.initialBalance !== undefined ? Number(body.initialBalance) : 0,
       targetAmount: body.targetAmount ? Number(body.targetAmount) : null,

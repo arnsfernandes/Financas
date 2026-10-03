@@ -75,3 +75,56 @@ self.addEventListener('fetch', (event) => {
     )
   }
 })
+
+// Web Push event handler for incoming automatic notifications
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+
+  let data = {}
+  try {
+    data = event.data.json()
+  } catch {
+    data = { title: 'Finanças', body: event.data.text() }
+  }
+
+  const title = data.title || 'Finanças'
+  const options = {
+    body: data.body || 'Você tem uma nova notificação financeira.',
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/icon-192.png',
+    tag: data.tag || 'financas-notification',
+    data: {
+      url: data.url || '/',
+      ...(data.data || {}),
+    },
+    vibrate: [100, 50, 100],
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+// Handle notification tap to open or focus the PWA
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+
+  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/'
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Check if there is already a window/tab open with the app
+      for (const client of windowClients) {
+        if (client.url && 'focus' in client) {
+          if (targetUrl !== '/') {
+            client.navigate(targetUrl)
+          }
+          return client.focus()
+        }
+      }
+      // If not open, open a new window to the target URL
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl)
+      }
+    })
+  )
+})
+

@@ -30,6 +30,7 @@ export interface LearnedCategoryRule {
 }
 
 export interface LearnCategoryInput {
+  userId?: string | null
   vendor?: string | null
   categoryId?: string | null
   categoryName?: string | null
@@ -98,6 +99,7 @@ export function extractLearningKeys(
  * Returns the learned category (id and name) if a reliable rule exists.
  */
 export async function getLearnedCategory(params: {
+  userId?: string | null
   vendor?: string | null
   transactionType?: 'expense' | 'income'
   itemKeyword?: string | null
@@ -118,13 +120,18 @@ export async function getLearnedCategory(params: {
 
   // 1. First priority: Exact match with item_keyword (specific rule for ambiguous/item-based purchases)
   if (safeKeyword) {
-    const { data: keywordMatch } = await supabase
+    let kwQuery = supabase
       .from('category_learning')
       .select('id, category_id, category_name, confidence, correction_count')
       .eq('vendor_key', vendorKey)
       .eq('transaction_type', txType)
       .eq('item_keyword', safeKeyword)
-      .maybeSingle()
+
+    if (params.userId) {
+      kwQuery = kwQuery.eq('user_id', params.userId)
+    }
+
+    const { data: keywordMatch } = await kwQuery.maybeSingle()
 
     if (keywordMatch && keywordMatch.category_id) {
       return {
@@ -138,13 +145,18 @@ export async function getLearnedCategory(params: {
 
   // 2. Second priority: Vendor-level rule (item_keyword IS NULL)
   // For highly ambiguous vendors, only apply vendor-level rule if no specific keyword was provided
-  const { data: vendorMatch } = await supabase
+  let vendorQuery = supabase
     .from('category_learning')
     .select('id, category_id, category_name, confidence, correction_count, item_keyword')
     .eq('vendor_key', vendorKey)
     .eq('transaction_type', txType)
     .is('item_keyword', null)
-    .maybeSingle()
+
+  if (params.userId) {
+    vendorQuery = vendorQuery.eq('user_id', params.userId)
+  }
+
+  const { data: vendorMatch } = await vendorQuery.maybeSingle()
 
   if (vendorMatch && vendorMatch.category_id) {
     // If it's an ambiguous vendor but we have a learned preference, verify minimum confidence
@@ -223,12 +235,14 @@ export async function learnCategoryPreference(
 
   const txType = input.transactionType || 'expense'
   const source = input.source || 'user_correction'
+  const userId = input.userId || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
 
   try {
-    // Check if a rule already exists for this vendor + type + keyword
+    // Check if a rule already exists for this vendor + type + keyword + user_id
     let query = supabase
       .from('category_learning')
       .select('id, correction_count, category_id')
+      .eq('user_id', userId)
       .eq('vendor_key', vendorKey)
       .eq('transaction_type', txType)
 
@@ -270,6 +284,7 @@ export async function learnCategoryPreference(
       const { data: created, error: insertErr } = await supabase
         .from('category_learning')
         .insert({
+          user_id: userId,
           vendor_key: vendorKey,
           vendor_display: vendorDisplay,
           category_id: resolvedCategoryId,

@@ -195,6 +195,7 @@ export async function processPendingRecurrences(
 
         const { error: insErr } = await supabase.from('transactions').insert({
           id: newTxId,
+          user_id: parentTx.user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6',
           account_id: parentTx.account_id || null,
           category_id: parentTx.category_id || null,
           vendor_id: parentTx.vendor_id || null,

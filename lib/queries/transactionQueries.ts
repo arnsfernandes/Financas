@@ -4,6 +4,7 @@ import { resolveRecurrenceUpdate } from '../recurrence'
 import { listCategories, normalizeCategoryName } from './categoryQueries'
 
 export interface TransactionFilter {
+  userId?: string
   type?: 'expense' | 'income' | 'all'
   accountId?: string
   categoryId?: string
@@ -131,6 +132,11 @@ export async function listTransactions(filters: TransactionFilter = {}) {
 
   if (matchingTransactionIds) {
     query = query.in('id', matchingTransactionIds)
+  }
+
+  // User ID filter (User isolation)
+  if (filters.userId) {
+    query = query.eq('user_id', filters.userId)
   }
 
   // Account filter
@@ -590,6 +596,7 @@ export async function updateTransaction(id: string, input: UpdateTransactionInpu
     if (plan.isMultiInstallment) {
       const baseDate = txUpdate.date || existingTx?.date || new Date().toISOString().slice(0, 10)
       await syncInstallmentGroup(supabase, id, plan, baseDate, {
+        user_id: existingTx?.user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6',
         account_id: txUpdate.account_id !== undefined ? txUpdate.account_id : (existingTx?.account_id ?? null),
         category_id: txUpdate.category_id !== undefined ? txUpdate.category_id : (existingTx?.category_id ?? null),
         payment_method: txUpdate.payment_method !== undefined ? txUpdate.payment_method : (existingTx?.payment_method ?? null),

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const type = typeParam === 'expense' || typeParam === 'income' || typeParam === 'all' ? typeParam : undefined
     const activeOnly = searchParams.get('activeOnly') === 'true' || searchParams.get('active_only') === 'true'
 
-    const categories = await listCategories({ type, activeOnly })
+    const categories = await listCategories({ type, activeOnly, userId: auth.userId })
     return NextResponse.json({ ok: true, categories })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Falha ao listar categorias'
@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     const category = await createCategory({
+      userId: auth.userId,
       name,
       type,
       icon,

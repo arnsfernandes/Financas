@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
     const referenceDate = searchParams.get('referenceDate') || undefined
 
     const summary = await getDashboardSummary({
+      userId: auth.userId,
       periodType,
       accountId,
       paymentMethod,

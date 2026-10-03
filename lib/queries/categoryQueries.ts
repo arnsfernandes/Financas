@@ -10,6 +10,7 @@ export function normalizeCategoryName(name: string): string {
 }
 
 export interface CategoryFilter {
+  userId?: string
   type?: 'expense' | 'income' | 'all'
   activeOnly?: boolean
 }
@@ -59,6 +60,10 @@ export async function listCategories(options: CategoryFilter = { activeOnly: fal
     }
     let query = fromRes.select('*').order('sort_order', { ascending: true }).order('name', { ascending: true })
 
+    if (options.userId) {
+      query = query.or(`is_system.eq.true,user_id.eq.${options.userId}`)
+    }
+
     if (options.type && options.type !== 'all') {
       query = query.eq('type', options.type)
     }
@@ -84,6 +89,7 @@ export async function listCategories(options: CategoryFilter = { activeOnly: fal
  * Create a new category in Supabase
  */
 export async function createCategory(input: {
+  userId?: string | null
   name: string
   type: 'expense' | 'income'
   icon?: string
@@ -93,10 +99,12 @@ export async function createCategory(input: {
   const supabase = getSupabaseClient()
   const trimmedName = input.name.trim()
   const normalized = normalizeCategoryName(trimmedName)
+  const userId = input.userId || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
 
   if (!supabase) {
     return {
       id: `mock-cat-${Date.now()}`,
+      user_id: userId,
       name: trimmedName,
       normalized_name: normalized,
       type: input.type,
@@ -108,13 +116,18 @@ export async function createCategory(input: {
     }
   }
 
-  // Verificar se já existe categoria com o mesmo normalized_name e type
-  const { data: existing } = await supabase
+  // Verificar se já existe categoria com o mesmo normalized_name e type para este usuário
+  let existingQuery = supabase
     .from('categories')
     .select('*')
     .eq('normalized_name', normalized)
     .eq('type', input.type)
-    .single()
+
+  if (userId) {
+    existingQuery = existingQuery.or(`is_system.eq.true,user_id.eq.${userId}`)
+  }
+
+  const { data: existing } = await existingQuery.maybeSingle()
 
   if (existing) {
     if (!existing.active) {
@@ -141,6 +154,7 @@ export async function createCategory(input: {
   const { data, error } = await supabase
     .from('categories')
     .insert({
+      user_id: userId,
       name: trimmedName,
       normalized_name: normalized,
       type: input.type,

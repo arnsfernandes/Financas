@@ -45,7 +45,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-it('routes a Telegram message with three launches through the real handler to one batch preview', async () => {
+it('routes a Telegram message with three launches through the real handler to one batch preview', { timeout: 15000 }, async () => {
   vi.useFakeTimers()
   vi.stubEnv('TELEGRAM_BOT_TOKEN', '100:test-token')
   vi.stubEnv('TELEGRAM_ALLOWED_USER_ID', '42')

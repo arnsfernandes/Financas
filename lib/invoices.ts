@@ -85,17 +85,23 @@ export async function getOrCreateInvoice(
   const computedTotal = await computeInvoicePurchasesTotal(accountId, dueDate)
 
   // 2. If closingDate is not provided, compute it
+  // 1. Fetch account closing_day and due_day and user_id
   let finalClosingDate = closingDate
-  if (!finalClosingDate) {
-    const { data: account } = await supabase
-      .from('accounts')
-      .select('closing_day, due_day')
-      .eq('id', accountId)
-      .single()
-    const cDay = account?.closing_day || 5
-    const dDay = account?.due_day || 15
-    const cycle = getCardInvoiceDates(dueDate, cDay, dDay)
-    finalClosingDate = cycle.closingDate
+  let accountUserId: string | null = null
+  const { data: account } = await supabase
+    .from('accounts')
+    .select('closing_day, due_day, user_id')
+    .eq('id', accountId)
+    .single()
+
+  if (account) {
+    accountUserId = account.user_id || null
+    if (!finalClosingDate) {
+      const cDay = account.closing_day || 5
+      const dDay = account.due_day || 15
+      const cycle = getCardInvoiceDates(dueDate, cDay, dDay)
+      finalClosingDate = cycle.closingDate
+    }
   }
 
   // 3. Find or create invoice record
@@ -117,6 +123,7 @@ export async function getOrCreateInvoice(
     const { data: created, error: insertError } = await supabase
       .from('credit_card_invoices')
       .insert({
+        user_id: accountUserId || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6',
         account_id: accountId,
         closing_date: finalClosingDate,
         due_date: dueDate,
@@ -191,9 +198,11 @@ export async function registerInvoicePayment(
   }
 
   // 2. Insert invoice payment record
+  const invoiceUserId = (invoice as any).user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
   const { data: paymentRecord, error: paymentError } = await supabase
     .from('invoice_payments')
     .insert({
+      user_id: invoiceUserId,
       invoice_id: invoice.id,
       amount: paymentAmount,
       payment_date: input.paymentDate || new Date().toISOString().slice(0, 10),

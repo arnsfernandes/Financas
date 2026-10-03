@@ -269,6 +269,7 @@ export function generateInstallmentDates(
 }
 
 export interface BaseInstallmentRowTemplate {
+  user_id?: string | null
   account_id?: string | null
   category_id?: string | null
   vendor_id?: string | null
@@ -318,6 +319,7 @@ export function buildFutureInstallmentRows(
 
     rows.push({
       id: generateUUID(),
+      user_id: template.user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6',
       account_id: template.account_id || null,
       category_id: template.category_id || null,
       vendor_id: template.vendor_id || null,
@@ -360,6 +362,7 @@ export function buildFutureInstallmentRows(
 }
 
 export interface SharedInstallmentFields {
+  user_id?: string | null
   account_id?: string | null
   category_id?: string | null
   vendor_id?: string | null
@@ -443,6 +446,7 @@ export async function syncInstallmentGroup(
     } else {
       rowsToInsert.push({
         id: generateUUID(),
+        user_id: shared.user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6',
         account_id: shared.account_id || null,
         category_id: shared.category_id || null,
         payment_method: shared.payment_method || null,

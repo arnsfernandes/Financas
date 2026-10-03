@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
     const activeOnly = searchParams.get('active') === 'true'
-    const accounts = await listAccountsWithStats({ activeOnly })
+    const accounts = await listAccountsWithStats({ activeOnly, userId: auth.userId })
     return NextResponse.json({ ok: true, accounts })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Failed to fetch accounts'
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     const skin = typeof body.skin === 'string' && body.skin.trim() ? body.skin.trim() : null
 
     const account = await createAccount({
+      userId: auth.userId,
       name: body.name.trim(),
       type: typeParse.data,
       institution: typeof body.institution === 'string' ? body.institution.trim() : null,

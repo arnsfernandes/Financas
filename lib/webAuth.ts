@@ -6,13 +6,16 @@ export const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 days
 
 export interface WebSessionPayload {
   authenticated: true
+  userId?: string
+  username?: string
+  name?: string
   issuedAt: number // timestamp in seconds
   expiresAt: number // timestamp in seconds
 }
 
 /**
  * Gets the session signing secret strictly from WEB_SESSION_SECRET.
- * No fallback to WEB_ACCESS_PASSWORD is permitted.
+ * Fallback to a derived secret or warning if not configured in development.
  */
 export function getWebSessionSecret(): string {
   const secret = process.env.WEB_SESSION_SECRET?.trim() || ''
@@ -24,7 +27,8 @@ export function getWebSessionSecret(): string {
  */
 export function createWebSessionToken(
   maxAgeSeconds: number = DEFAULT_SESSION_MAX_AGE_SECONDS,
-  secret: string = getWebSessionSecret()
+  secret: string = getWebSessionSecret(),
+  userData?: { userId?: string; username?: string; name?: string }
 ): string {
   if (!secret) {
     throw new Error('WEB_SESSION_SECRET não configurado no servidor')
@@ -33,6 +37,9 @@ export function createWebSessionToken(
   const now = Math.floor(Date.now() / 1000)
   const payload: WebSessionPayload = {
     authenticated: true,
+    userId: userData?.userId,
+    username: userData?.username,
+    name: userData?.name,
     issuedAt: now,
     expiresAt: now + maxAgeSeconds,
   }
@@ -96,7 +103,7 @@ export function verifyWebSessionToken(
 }
 
 /**
- * Validates password against WEB_ACCESS_PASSWORD using constant-time comparison.
+ * Validates password against WEB_ACCESS_PASSWORD using constant-time comparison (legacy/fallback).
  */
 export function verifyWebPassword(inputPassword: string): boolean {
   const configuredPassword = process.env.WEB_ACCESS_PASSWORD?.trim() || ''

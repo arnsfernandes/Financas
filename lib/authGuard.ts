@@ -67,7 +67,13 @@ export function isTrulyLocalRequest(req: NextRequest): boolean {
  * 3. Fallback is ONLY allowed when the request is purely local (localhost / 127.0.0.1 in non-production).
  * 4. Returns 401 for any unauthorized, invalid or missing credentials.
  */
-export function requireFinancialAuth(req: NextRequest): { authorized: boolean; response?: NextResponse; user?: any; authType?: 'telegram' | 'web' | 'local' } {
+export function requireFinancialAuth(req: NextRequest): {
+  authorized: boolean
+  response?: NextResponse
+  user?: { id?: string; userId?: string; username?: string; name?: string; isWebUser?: boolean }
+  authType?: 'telegram' | 'web' | 'local'
+  userId?: string
+} {
   const authHeader = req.headers.get('authorization') || req.headers.get('x-telegram-init-data')
 
   // 1. If Telegram credentials are provided in headers, strictly validate HMAC and User ID
@@ -82,18 +88,43 @@ export function requireFinancialAuth(req: NextRequest): { authorized: boolean; r
         ),
       }
     }
-    return { authorized: true, user: auth.user, authType: 'telegram' }
+    // For Telegram, map to default owner user ID
+    const defaultOwnerId = 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
+    return {
+      authorized: true,
+      user: { ...(auth.user as any), telegramId: auth.user?.id, userId: defaultOwnerId },
+      authType: 'telegram',
+      userId: defaultOwnerId,
+    }
   }
 
   // 2. Check for Web session cookie (independent direct browser login)
   const webAuth = verifyWebSessionFromRequest(req)
-  if (webAuth.valid) {
-    return { authorized: true, user: { isWebUser: true }, authType: 'web' }
+  if (webAuth.valid && webAuth.payload) {
+    const userId = webAuth.payload.userId || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
+    return {
+      authorized: true,
+      user: {
+        id: userId,
+        userId: userId,
+        username: webAuth.payload.username,
+        name: webAuth.payload.name,
+        isWebUser: true,
+      },
+      authType: 'web',
+      userId,
+    }
   }
 
   // 3. In local development without proxies, allow loopback access
   if (isTrulyLocalRequest(req)) {
-    return { authorized: true, authType: 'local' }
+    const defaultOwnerId = 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
+    return {
+      authorized: true,
+      user: { id: defaultOwnerId, userId: defaultOwnerId, username: 'local_dev' },
+      authType: 'local',
+      userId: defaultOwnerId,
+    }
   }
 
   // 4. Any remote, proxy, tunnel, public host or production request without valid Telegram or Web auth is rejected

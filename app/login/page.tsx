@@ -1,33 +1,52 @@
 'use client'
 
-import React, { useState, FormEvent } from 'react'
+import React, { useState, useEffect, FormEvent } from 'react'
 import { Lock, User, Sparkles, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
-interface WebLoginScreenProps {
-  onLoginSuccess: () => void
-}
-
-export function WebLoginScreen({ onLoginSuccess }: WebLoginScreenProps) {
+export default function LoginPage() {
+  const router = useRouter()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [checkingAuth, setCheckingAuth] = useState(true)
   const [error, setError] = useState('')
+
+  // If already authenticated, redirect immediately to home
+  useEffect(() => {
+    async function checkExistingAuth() {
+      try {
+        const res = await fetch('/api/auth/me')
+        const data = await res.json()
+        if (data.ok && data.authenticated) {
+          router.replace('/')
+          return
+        }
+      } catch {
+        // Not authenticated
+      } finally {
+        setCheckingAuth(false)
+      }
+    }
+    checkExistingAuth()
+  }, [router])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    setError('')
+
     const cleanUser = username.trim()
     if (!cleanUser) {
-      setError('Informe seu nome de usuário.')
+      setError('Por favor, informe seu usuário.')
       return
     }
     if (!password) {
-      setError('Informe sua senha de acesso.')
+      setError('Por favor, informe sua senha.')
       return
     }
 
     setLoading(true)
-    setError('')
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -38,15 +57,25 @@ export function WebLoginScreen({ onLoginSuccess }: WebLoginScreenProps) {
 
       const data = await res.json()
       if (res.ok && data.ok) {
-        onLoginSuccess()
+        // Redireciona para o painel principal
+        router.push('/')
+        router.refresh()
       } else {
         setError(data.error || 'Usuário ou senha incorretos.')
       }
     } catch {
-      setError('Erro de conexão ao tentar fazer login.')
+      setError('Erro de conexão com o servidor. Tente novamente.')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-[#2F68FE]/30 border-t-[#2F68FE] rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (
@@ -64,7 +93,7 @@ export function WebLoginScreen({ onLoginSuccess }: WebLoginScreenProps) {
             Entrar no Finanças
           </h1>
           <p className="text-xs text-[#6B7280] mt-1.5 max-w-xs leading-relaxed">
-            Painel financeiro protegido. Insira suas credenciais para continuar.
+            Acesse seu painel financeiro com seu usuário e senha.
           </p>
         </div>
 
@@ -105,7 +134,7 @@ export function WebLoginScreen({ onLoginSuccess }: WebLoginScreenProps) {
 
           <div>
             <label className="block text-xs font-semibold text-[#374151] mb-1.5">
-              Senha de Acesso
+              Senha
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#9CA3AF]">

@@ -10,6 +10,7 @@ import {
   CreditCard,
   Layers,
   LogOut,
+  Smartphone,
 } from 'lucide-react'
 import type { TabType } from '@/app/page'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
@@ -21,6 +22,7 @@ export interface SidebarProps {
   setMobileMenuOpen: (open: boolean) => void
   transactionsCount: number
   onNavigateTab?: (tab: TabType) => void
+  onOpenShortcutsModal?: () => void
 }
 
 export function Sidebar({
@@ -30,6 +32,7 @@ export function Sidebar({
   setMobileMenuOpen,
   transactionsCount,
   onNavigateTab,
+  onOpenShortcutsModal,
 }: SidebarProps) {
   const { isTelegram, logoutWeb } = useTelegramWebApp()
 
@@ -124,6 +127,33 @@ export function Sidebar({
               })}
             </div>
           </div>
+
+          {/* Integrações */}
+          {onOpenShortcutsModal && (
+            <div className="space-y-1">
+              <span className="px-3 text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider block">
+                Integrações
+              </span>
+              <div className="space-y-0.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenShortcutsModal()
+                    setMobileMenuOpen(false)
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-[#4B5563] hover:text-[#111827] hover:bg-[#F2F4F7] transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Smartphone className="w-4 h-4 text-[#2F68FE]" />
+                    <span>Atalhos & Siri</span>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-md bg-[#EBF2FF] text-[#2F68FE]">
+                    iOS
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
         </nav>
       </div>
 

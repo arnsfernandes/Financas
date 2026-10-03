@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
     const paymentMethod = searchParams.get('paymentMethod') || searchParams.get('payment_method') || undefined
 
     const filters: TransactionFilter = {
+      userId: auth.userId,
       type,
       accountId,
       categoryId,
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
     const { receiptSchema } = await import('@/lib/schema')
     const { validateLaunchCompleteness } = await import('@/lib/textRouter')
     const { listAccounts } = await import('@/lib/queries')
-    const activeAccounts = await listAccounts({ activeOnly: true })
+    const activeAccounts = await listAccounts({ activeOnly: true, userId: auth.userId })
 
     // Support batch saving (multiple transactions reviewed on web)
     if (Array.isArray(body.items) && body.items.length > 0) {
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
         if (!parsed.success) {
           return NextResponse.json({ ok: false, error: 'Dados de um dos lançamentos são inválidos.' }, { status: 400 })
         }
-        const receipt = { ...parsed.data, installment_group_id: null }
+        const receipt = { ...parsed.data, installment_group_id: null, user_id: auth.userId }
         const validation = validateLaunchCompleteness(receipt, activeAccounts)
         if (!validation.isComplete) {
           return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 })
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
         const sourceType: 'image' | 'text' | 'manual' = item.sourceType === 'image' ? 'image' : item.sourceType === 'text' ? 'text' : 'manual'
         persistInputs.push({
           receipt,
+          userId: auth.userId,
           imageKey: null,
           imageSha256: null,
           sourceType,
@@ -143,7 +145,7 @@ export async function POST(req: NextRequest) {
     const parsed = receiptSchema.safeParse({ vendor_address: null, currency: 'BRL', subtotal: null,
       tax: null, tip: null, time: null, notes: null, items: [], ...body.receipt })
     if (!parsed.success) return NextResponse.json({ ok: false, error: 'Dados do lançamento inválidos.' }, { status: 400 })
-    const receipt = { ...parsed.data, installment_group_id: null }
+    const receipt = { ...parsed.data, installment_group_id: null, user_id: auth.userId }
     const validation = validateLaunchCompleteness(receipt, activeAccounts)
     if (!validation.isComplete) return NextResponse.json({ ok: false, error: validation.reason }, { status: 400 })
     if (body.sourceType === 'image' && !file) return NextResponse.json({ ok: false, error: 'Comprovante ausente. Anexe o arquivo antes de salvar.' }, { status: 400 })
@@ -156,7 +158,7 @@ export async function POST(req: NextRequest) {
       imageKey = stored.key
       imageSha256 = stored.sha256
     }
-    const saved = await save({ receipt, imageKey, imageSha256, sourceType, originType: sourceType,
+    const saved = await save({ receipt, userId: auth.userId, imageKey, imageSha256, sourceType, originType: sourceType,
       rawText: typeof body.rawText === 'string' ? body.rawText : null,
       originalFilename: file?.name || null, capturedAt: new Date().toISOString(),
       originalExtractedData: body.originalExtractedData || null, allowDuplicate: body.allowDuplicate === true })

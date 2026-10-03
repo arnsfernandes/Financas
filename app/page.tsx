@@ -17,6 +17,8 @@ import {
 import { AccountsTab } from '@/components/accounts/AccountsTab'
 import { CategoriesTab } from '@/components/categories/CategoriesTab'
 import { AssistantFloatingWidget } from '@/components/ui/AssistantFloatingWidget'
+import { ShortcutsTokenModal } from '@/components/modals/ShortcutsTokenModal'
+import { usePwaPushPrompt } from '@/lib/usePwaPush'
 
 export type TabType = 'dashboard' | 'transactions' | 'accounts' | 'categories' | 'new'
 
@@ -33,6 +35,10 @@ export default function Home() {
   const [isWebAuthenticated, setIsWebAuthenticated] = useState<boolean | null>(null)
   const [activeTab, setActiveTab] = useState<TabType>('dashboard')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState(false)
+
+  // Hook Web Push notification prompt (solicitação única por gesto do usuário após abrir o PWA)
+  usePwaPushPrompt(Boolean(isWebAuthenticated))
 
   // Checa URL search params para atalhos PWA (ex: /?tab=new ou /?tab=transactions)
   useEffect(() => {
@@ -408,7 +414,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F8FA] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#3B82F6]/20 selection:text-[#0F172A]">
+    <div className="min-h-screen bg-[#F4F6F9] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#3B82F6]/20 selection:text-[#0F172A]">
       {/* Mobile Top Header */}
       <MobileHeader
         setActiveTab={(tab) => {
@@ -450,6 +456,7 @@ export default function Home() {
             fetchDashboard()
           }
         }}
+        onOpenShortcutsModal={() => setShortcutsModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -579,6 +586,12 @@ export default function Home() {
           />
         )}
       </main>
+
+      {/* Modal de Token e Configuração de Atalhos / Siri do iOS */}
+      <ShortcutsTokenModal
+        isOpen={shortcutsModalOpen}
+        onClose={() => setShortcutsModalOpen(false)}
+      />
 
       {/* Assistente Financeiro Flutuante */}
       <AssistantFloatingWidget />

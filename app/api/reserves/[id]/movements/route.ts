@@ -36,6 +36,7 @@ export async function POST(
     }
 
     const result = await addReserveMovement(id, {
+      userId: auth.userId,
       type,
       amount: numAmount,
       date,

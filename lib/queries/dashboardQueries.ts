@@ -8,6 +8,7 @@ import { listCategories, normalizeCategoryName, translateCategory } from './cate
 import { getEffectiveDate, buildEffectiveDateOrFilter } from './transactionQueries'
 
 export interface DashboardFilter {
+  userId?: string
   periodType?: 'week' | 'month' | 'year' | 'custom'
   accountId?: string // Filter dashboard by specific account
   paymentMethod?: string // Filter dashboard by payment method (e.g. 'PIX')
@@ -336,10 +337,16 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
   }
 
   // Fetch all accounts to compute account-level metrics
-  const { data: accountsData } = await supabase
+  let accountsQuery = supabase
     .from('accounts')
     .select('id, name, type, institution, active, closing_day, due_day, custom_logo, color, skin')
     .order('name', { ascending: true })
+
+  if (options.userId) {
+    accountsQuery = accountsQuery.eq('user_id', options.userId)
+  }
+
+  const { data: accountsData } = await accountsQuery
 
   const accountsMap: Record<string, { id: string; name: string; type: string; institution: string | null; closing_day?: number | null; due_day?: number | null; custom_logo?: string | null; color?: string | null; skin?: string | null }> = {}
   for (const acc of accountsData || []) {
@@ -387,6 +394,10 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
     .select('id, type, account_id, category_id, vendor, vendor_id, date, time, currency, category, total, payment_method, notes, created_at, is_recurring, recurrence_frequency, recurrence_next_date, recurrence_status, recurrence_parent_id, recurrence_cycle_date, installment_group_id, installment_current, installment_total, installment_amount, categories(id, name, icon, color), accounts(id, name, type, institution), canonical_vendors(id, canonical_name, normalized_key)')
     .or(dateOrFilter)
     .order('created_at', { ascending: false })
+
+  if (options.userId) {
+    txQuery = txQuery.eq('user_id', options.userId)
+  }
 
   if (effectiveAccountId) {
     txQuery = txQuery.eq('account_id', effectiveAccountId)

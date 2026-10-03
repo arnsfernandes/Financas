@@ -28,7 +28,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#F8F9FA',
+  themeColor: '#F4F6F9',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -39,7 +39,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className="bg-[#F8F9FA] text-[#111827]">
+    <html lang="pt-BR" className="bg-[#F4F6F9] text-[#111827]">
       <head>
         <Script
           src="https://telegram.org/js/telegram-web-app.js"
@@ -49,9 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="Finanças" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="theme-color" content="#F8F9FA" />
+        <meta name="theme-color" content="#F4F6F9" />
       </head>
-      <body className="min-h-screen bg-[#F8F9FA] antialiased selection:bg-[#EBF2FF] selection:text-[#2F68FE]">
+      <body className="min-h-screen bg-[#F4F6F9] antialiased selection:bg-[#EBF2FF] selection:text-[#2F68FE]">
         <TelegramWebAppProvider>{children}</TelegramWebAppProvider>
         <Script id="sw-register" strategy="afterInteractive">
           {`

@@ -77,16 +77,22 @@ function mapDbReserveToDomain(row: any, movements: any[] = []): Reserve {
   }
 }
 
-export async function getReserves(): Promise<Reserve[]> {
+export async function getReserves(userId?: string): Promise<Reserve[]> {
   const supabase = getSupabaseClient()
   if (!supabase) {
     return DEFAULT_RESERVES
   }
 
-  const { data: reservesData, error: reservesError } = await supabase
+  let query = supabase
     .from('reserves')
     .select('*')
     .order('created_at', { ascending: true })
+
+  if (userId) {
+    query = query.eq('user_id', userId)
+  }
+
+  const { data: reservesData, error: reservesError } = await query
 
   if (reservesError || !reservesData) {
     console.error('Error fetching reserves:', reservesError)
@@ -98,11 +104,17 @@ export async function getReserves(): Promise<Reserve[]> {
   }
 
   const reserveIds = reservesData.map((r) => r.id)
-  const { data: movementsData, error: movError } = await supabase
+  let movQuery = supabase
     .from('reserve_movements')
     .select('*')
     .in('reserve_id', reserveIds)
     .order('created_at', { ascending: false })
+
+  if (userId) {
+    movQuery = movQuery.eq('user_id', userId)
+  }
+
+  const { data: movementsData, error: movError } = await movQuery
 
   if (movError) {
     console.error('Error fetching reserve movements:', movError)
@@ -123,6 +135,7 @@ export async function saveReserves(_reserves: Reserve[]): Promise<void> {
 }
 
 export async function createReserve(input: {
+  userId?: string | null
   name: string
   initialBalance?: number
   targetAmount?: number | null
@@ -137,6 +150,7 @@ export async function createReserve(input: {
   if (!trimmed) throw new Error('Nome da reserva é obrigatório.')
 
   const initialAmount = Math.max(0, Number(input.initialBalance) || 0)
+  const userId = input.userId || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
   const supabase = getSupabaseClient()
 
   if (!supabase) {
@@ -171,6 +185,7 @@ export async function createReserve(input: {
   const { data: createdReserve, error: createError } = await supabase
     .from('reserves')
     .insert({
+      user_id: userId,
       name: trimmed,
       current_amount: initialAmount,
       target_amount: input.targetAmount !== undefined && input.targetAmount !== null ? Number(input.targetAmount) : null,
@@ -192,6 +207,7 @@ export async function createReserve(input: {
     const { data: movData, error: movError } = await supabase
       .from('reserve_movements')
       .insert({
+        user_id: userId,
         reserve_id: createdReserve.id,
         amount: initialAmount,
         type: 'deposit',
@@ -287,6 +303,7 @@ export async function deleteReserve(id: string): Promise<boolean> {
 export async function addReserveMovement(
   reserveId: string,
   input: {
+    userId?: string | null
     type: 'deposit' | 'withdrawal'
     amount: number
     date?: string
@@ -325,9 +342,11 @@ export async function addReserveMovement(
   const desc = input.notes?.trim() || (input.fromAccount ? `Origem/Destino: ${input.fromAccount}` : null)
 
   // 2. Insert movement
+  const userId = input.userId || currentReserve.user_id || 'bc5a76de-8865-4ec3-b7d5-5dfbfb8123a6'
   const { data: movementRow, error: movInsertError } = await supabase
     .from('reserve_movements')
     .insert({
+      user_id: userId,
       reserve_id: reserveId,
       amount,
       type: dbType,

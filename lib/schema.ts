@@ -18,6 +18,7 @@ export type AccountType = z.infer<typeof accountTypeSchema>
 
 export const accountSchema = z.object({
   id: z.string(),
+  user_id: z.string().nullable().optional(),
   name: z.string(),
   type: accountTypeSchema,
   institution: z.string().nullable().optional(),
@@ -34,6 +35,7 @@ export type Account = z.infer<typeof accountSchema>
 
 export const categorySchema = z.object({
   id: z.string(),
+  user_id: z.string().nullable().optional(),
   name: z.string().min(1, 'Nome da categoria é obrigatório'),
   normalized_name: z.string().optional(),
   type: z.enum(['expense', 'income']),
@@ -57,6 +59,7 @@ export const lineItemSchema = z.object({
 })
 
 export const receiptSchema = z.object({
+  user_id: z.string().nullable().optional(),
   type: z.enum(['expense', 'income']).default('expense'),
   account_id: z.string().nullable().optional(),
   category_id: z.string().nullable().optional(),
@@ -107,6 +110,7 @@ export type Receipt = z.infer<typeof receiptSchema>
  */
 export const storedReceiptSchema = receiptSchema.extend({
   id: z.string(),
+  user_id: z.string().nullable().optional(),
   category_id: z.string().nullable().optional(),
   image_key: z.string().nullable(),
   image_sha256: z.string().nullable(),
@@ -124,6 +128,7 @@ export type StoredReceipt = z.infer<typeof storedReceiptSchema>
 
 export interface TransactionItem {
   id?: string
+  user_id?: string | null
   transaction_id?: string
   description: string
   normalized_name?: string
@@ -142,6 +147,7 @@ export interface TransactionItem {
 
 export interface TransactionRecord {
   id: string
+  user_id?: string | null
   type?: 'expense' | 'income'
   account_id?: string | null
   accounts?: Account | null
@@ -201,6 +207,7 @@ export function normaliseReceipt(input: unknown): Receipt {
 
   return {
     ...parsed,
+    user_id: parsed.user_id ?? null,
     type: parsed.type === 'income' ? 'income' : 'expense',
     date: parsed.date ?? null,
     account_id: parsed.account_id ?? null,
@@ -242,6 +249,7 @@ export function normaliseReceipt(input: unknown): Receipt {
 
 export interface InvoicePayment {
   id: string
+  user_id?: string | null
   invoice_id: string
   amount: number
   payment_date: string
@@ -253,6 +261,7 @@ export interface InvoicePayment {
 
 export interface CreditCardInvoice {
   id: string
+  user_id?: string | null
   account_id: string
   closing_date: string
   due_date: string
