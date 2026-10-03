@@ -89,21 +89,17 @@ export function usePwaPushPrompt(enabled: boolean = true) {
       return
     }
 
-    // Check if user already dismissed or prompted in this device storage
-    const hasPrompted = localStorage.getItem('financas_pwa_push_prompted')
-    if (hasPrompted) {
-      return
-    }
-
     // Register user interaction handler to trigger iOS native permission prompt
-    const handleFirstUserInteraction = async () => {
-      // Remove listeners immediately so it runs only once
-      window.removeEventListener('click', handleFirstUserInteraction)
-      window.removeEventListener('touchend', handleFirstUserInteraction)
+    let hasTriggered = false
 
-      localStorage.setItem('financas_pwa_push_prompted', 'true')
+    const handleUserGesture = async () => {
+      if (hasTriggered) return
+      hasTriggered = true
+
+      cleanup()
 
       try {
+        // Request iOS native permission prompt directly inside user gesture
         const permission = await Notification.requestPermission()
         if (permission === 'granted') {
           await subscribeToWebPush()
@@ -113,12 +109,23 @@ export function usePwaPushPrompt(enabled: boolean = true) {
       }
     }
 
-    window.addEventListener('click', handleFirstUserInteraction, { once: true })
-    window.addEventListener('touchend', handleFirstUserInteraction, { once: true })
+    function cleanup() {
+      document.removeEventListener('click', handleUserGesture, true)
+      document.removeEventListener('touchend', handleUserGesture, true)
+      document.removeEventListener('pointerup', handleUserGesture, true)
+      window.removeEventListener('click', handleUserGesture, true)
+      window.removeEventListener('touchend', handleUserGesture, true)
+    }
+
+    // Use capture phase on document and window to guarantee catching any tap/click on iOS
+    document.addEventListener('click', handleUserGesture, true)
+    document.addEventListener('touchend', handleUserGesture, true)
+    document.addEventListener('pointerup', handleUserGesture, true)
+    window.addEventListener('click', handleUserGesture, true)
+    window.addEventListener('touchend', handleUserGesture, true)
 
     return () => {
-      window.removeEventListener('click', handleFirstUserInteraction)
-      window.removeEventListener('touchend', handleFirstUserInteraction)
+      cleanup()
     }
   }, [enabled])
 }

@@ -1,5 +1,5 @@
 // Service Worker for Finanças PWA
-const CACHE_NAME = 'financas-pwa-v1'
+const CACHE_NAME = 'financas-pwa-v2'
 
 const PRECACHE_ASSETS = [
   '/',
