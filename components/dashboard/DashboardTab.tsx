@@ -21,7 +21,9 @@ import {
   Search,
   Bell,
   Repeat,
+  Wallet,
 } from 'lucide-react'
+import { Sheet, SheetCloseButton } from '@/components/ui/Sheet'
 import type { Account, TransactionRecord } from '@/lib/schema'
 import type { DashboardSummary } from '@/lib/queries'
 import { formatBRL } from '@/lib/formatters'
@@ -154,7 +156,7 @@ export function DashboardTab({
   const [monthModalCategory, setMonthModalCategory] = useState<string | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [searchText, setSearchText] = useState('')
-  const [showAllSubs, setShowAllSubs] = useState(false)
+  const [openCard, setOpenCard] = useState<'spend' | 'invoice' | 'subs' | null>(null)
   const budgets = (dashboardData as any)?.budgets as { available: boolean; values: Record<string, number> } | undefined
   const history = ((dashboardData as any)?.monthlyHistory || []) as Array<{ month: string; label: string; total: number }>
   const subscriptions = ((dashboardData as any)?.subscriptions || { items: [], monthlyTotal: 0 }) as { items: any[]; monthlyTotal: number }
@@ -422,396 +424,271 @@ export function DashboardTab({
             </div>
           )}
 
-          {/* 2. CARDS PRINCIPAIS: gastos do mês + fatura do cartão (como no app do banco) */}
-          <div className={`grid grid-cols-1 gap-4 ${cardInvoice ? 'md:grid-cols-2' : ''}`}>
-            {(() => {
-              const expenses = dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0
-              const income = dashboardData.metrics?.totalIncome ?? 0
-              const diff = dashboardData.metrics?.comparison?.differencePercentage
-              return (
-                <div
-                  onClick={() => handleOpenDrawer('expense')}
-                  className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] cursor-pointer hover:border-slate-300 transition-colors flex flex-col"
-                  title="Ver todos os gastos do mês"
-                >
-                  <span className="text-xs font-medium text-slate-500">Gastos do mês</span>
-                  <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 tabular-nums mt-1">
-                    {formatBRL(expenses)}
-                  </span>
-                  {diff !== null && diff !== undefined && Number.isFinite(diff) && (
-                    <span className={`text-xs font-medium mt-1 inline-flex items-center gap-1 ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                      {diff > 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
-                      {Math.abs(Math.round(diff))}% vs {dashboardData.period?.previousLabel?.split(' de ')[0]?.toLowerCase() || 'mês anterior'}
+          {/* 2. CARDS EM GRADE (estilo apps da Apple): cada card mostra o essencial; tocar abre os detalhes. */}
+          {(() => {
+            const expenses = dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0
+            const income = dashboardData.metrics?.totalIncome ?? 0
+            const diff = dashboardData.metrics?.comparison?.differencePercentage
+            const prevLabel = dashboardData.period?.previousLabel?.split(' de ')[0]?.toLowerCase() || 'mês anterior'
+            const showSubs = subscriptions.items.length > 0 && quickFilter !== 'cash'
+            const cardShort = cardInvoice ? cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '') : ''
+            const invoiceStatus = cardInvoice
+              ? !cardInvoice.closed
+                ? { text: 'Aberta', cls: 'bg-amber-50 text-amber-800' }
+                : cardInvoice.toPay <= 0.009
+                  ? { text: 'Paga', cls: 'bg-emerald-50 text-emerald-700' }
+                  : { text: 'Fechada', cls: 'bg-rose-50 text-rose-700' }
+              : null
+            const subsUp = subscriptions.items.filter((s: any) => s.increased).length
+            const cats = dashboardData.topCategories || []
+            const totalSpent = dashboardData.metrics.totalExpenses || 1
+            const barColors = ['#2F68FE', '#0EA5E9', '#F59E0B', '#EC4899', '#8B5CF6']
+            const diffBadge = diff !== null && diff !== undefined && Number.isFinite(diff) && (
+              <span className={`text-xs font-medium inline-flex items-center gap-1 ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {diff > 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
+                {Math.abs(Math.round(diff))}% vs {prevLabel}
+              </span>
+            )
+            const bars = history.length > 1 && (
+              <MonthBars
+                history={history}
+                budget={totalBudget}
+                current={selectedMonthKey}
+                onSelect={(index) => {
+                  const from = history.findIndex((h) => h.month === selectedMonthKey)
+                  if (from >= 0 && index !== from) handleMonthNavigate(index - from)
+                }}
+              />
+            )
+            const openCategories = () => {
+              if (periodTx) {
+                setMonthModalCategory(null)
+                setMonthModal('categories')
+              } else onNavigateToCategories?.()
+            }
+            const openTransactions = () => {
+              if (periodTx) {
+                setMonthModal('transactions')
+                return
+              }
+              setFilterType('all')
+              navigateToTransactionsFiltered({
+                startDate: dashboardData.period.startDate,
+                endDate: dashboardData.period.endDate,
+                paymentMethod: quickFilter === 'card' ? 'credit_card' : quickFilter === 'pix' ? 'PIX' : quickFilter === 'cash' ? 'Dinheiro' : undefined,
+              })
+            }
+
+            return (
+              <>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  {/* Gastos do mês (largo) */}
+                  <Tile className="col-span-2" icon={<Wallet className="w-3.5 h-3.5" />} iconCls="bg-[#EBF2FF] text-[#2F68FE]" label="Gastos do mês" onOpen={() => setOpenCard('spend')}>
+                    <span className="block text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 tabular-nums mt-1">{formatBRL(expenses)}</span>
+                    <span className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
+                      {diffBadge}
+                      {income > 0 && <span className="text-xs text-slate-500">entradas <span className="font-semibold text-emerald-600 tabular-nums">{formatBRL(income)}</span></span>}
                     </span>
+                    {bars}
+                  </Tile>
+
+                  {/* Fatura do cartão (quadrado) */}
+                  {cardInvoice && invoiceStatus && (
+                    <Tile className={showSubs ? 'col-span-1' : 'col-span-2'} icon={<CreditCard className="w-3.5 h-3.5" />} iconCls="bg-orange-50 text-orange-600" label={`Fatura ${cardShort}`} onOpen={() => setOpenCard('invoice')}>
+                      <span className={`self-start inline-block text-[10px] font-semibold rounded-md px-1.5 py-0.5 mt-1 ${invoiceStatus.cls}`}>{invoiceStatus.text}</span>
+                      <span className="block text-[11px] text-slate-500 mt-2">A pagar</span>
+                      <span className="block text-xl sm:text-2xl font-bold tracking-tight text-slate-900 tabular-nums leading-tight">{formatBRL(cardInvoice.toPay)}</span>
+                      <span className="block text-[11px] text-slate-400 mt-auto pt-2">vence {shortDate(cardInvoice.dueDate)}</span>
+                    </Tile>
                   )}
-                  {history.length > 1 && (
-                    <MonthBars
-                      history={history}
-                      budget={totalBudget}
-                      current={selectedMonthKey}
-                      onSelect={(index) => {
-                        const from = history.findIndex((h) => h.month === selectedMonthKey)
-                        if (from >= 0 && index !== from) handleMonthNavigate(index - from)
-                      }}
-                    />
+
+                  {/* Assinaturas (quadrado) */}
+                  {showSubs && (
+                    <Tile className={cardInvoice ? 'col-span-1' : 'col-span-2'} icon={<Repeat className="w-3.5 h-3.5" />} iconCls="bg-violet-50 text-violet-600" label="Assinaturas" onOpen={() => setOpenCard('subs')}>
+                      <span className="block text-[11px] text-slate-500 mt-[1.6rem]">Por mês</span>
+                      <span className="block text-xl sm:text-2xl font-bold tracking-tight text-slate-900 tabular-nums leading-tight">{formatBRL(subscriptions.monthlyTotal)}</span>
+                      <span className="block text-[11px] mt-auto pt-2">
+                        <span className="text-slate-400">{subscriptions.items.length} ativas</span>
+                        {subsUp > 0 && <span className="text-amber-700"> · {subsUp} subiu</span>}
+                      </span>
+                    </Tile>
                   )}
-                  <div className="mt-auto pt-4">
-                    <div className="border-t border-slate-100 pt-3 space-y-1.5 text-sm">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleOpenDrawer('income')
-                        }}
-                        className="w-full flex justify-between items-center text-left cursor-pointer"
-                      >
-                        <span className="text-slate-500">Entradas</span>
-                        <span className="font-semibold text-emerald-600 tabular-nums">{formatBRL(income)}</span>
-                      </button>
-                      {income > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-500">Saldo</span>
-                          <span className="font-semibold text-slate-900 tabular-nums">{formatBRL(income - expenses)}</span>
+
+                  {/* Onde você gastou (largo) */}
+                  <Tile className="col-span-2" icon={<PieChart className="w-3.5 h-3.5" />} iconCls="bg-purple-50 text-purple-600" label="Onde você gastou" onOpen={openCategories}>
+                    {cats.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-6 text-center">Nenhuma despesa no período.</p>
+                    ) : (
+                      <div className="space-y-2.5 mt-3">
+                        {cats.slice(0, 4).map((cat, i) => {
+                          const pct = cat.percentage ?? Number(((cat.total / totalSpent) * 100).toFixed(1))
+                          const catBudget = budgets?.values?.[cat.category]
+                          const used = catBudget ? (cat.total / catBudget) * 100 : null
+                          return (
+                            <div key={cat.category}>
+                              <div className="flex items-center justify-between gap-3 text-sm">
+                                <span className="truncate text-slate-800">{cat.category}</span>
+                                <span className="shrink-0 tabular-nums font-semibold text-slate-900">
+                                  {formatBRL(cat.total)}
+                                  <span className={`ml-1.5 text-[10px] font-medium ${used === null ? 'text-slate-400' : used >= 100 ? 'text-rose-600' : used >= 80 ? 'text-amber-700' : 'text-emerald-600'}`}>
+                                    {used === null ? `${Math.round(pct)}%` : `${Math.round(used)}% orç.`}
+                                  </span>
+                                </span>
+                              </div>
+                              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                                <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(3, used ?? pct))}%`, backgroundColor: used === null ? barColors[i % barColors.length] : used >= 100 ? '#E24B4A' : used >= 80 ? '#EF9F27' : '#639922' }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                        {cats.length > 4 && <p className="text-[11px] text-slate-400">+ {cats.length - 4} categorias</p>}
+                      </div>
+                    )}
+                  </Tile>
+
+                  {/* Últimos lançamentos (largo) */}
+                  <Tile className="col-span-2" icon={<ReceiptText className="w-3.5 h-3.5" />} iconCls="bg-slate-100 text-slate-600" label="Últimos lançamentos" onOpen={openTransactions}>
+                    {recentTransactions.length === 0 ? (
+                      <p className="text-xs text-slate-400 py-6 text-center">Nenhum lançamento no período.</p>
+                    ) : (
+                      <div className="divide-y divide-slate-100 mt-1">
+                        {recentTransactions.slice(0, 4).map((tx: any) => {
+                          const isIncome = tx.type === 'income'
+                          const title = tx.canonical_vendors?.canonical_name || tx.vendor || (isIncome ? 'Receita' : 'Despesa')
+                          const catName = tx.categories?.name || tx.category || 'Geral'
+                          const visual = getCategoryVisual(title + ' ' + catName)
+                          const IconComp = visual.icon
+                          const isParcel = Number(tx.installment_total) > 1
+                          const purchaseDate: string | null = tx.original_extracted_data?.date || null
+                          return (
+                            <button
+                              key={tx.id}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedHomeTx(tx)
+                              }}
+                              className="w-full flex items-center gap-3 py-2 text-left rounded-xl hover:bg-slate-50 -mx-1 px-1"
+                            >
+                              <span className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: visual.bg, color: visual.color }}>
+                                <IconComp className="w-3.5 h-3.5" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-sm font-medium text-slate-900 truncate">
+                                  {title}
+                                  {isParcel && <span className="ml-1 text-[10px] font-semibold text-[#2F68FE]">{tx.installment_current}/{tx.installment_total}</span>}
+                                </span>
+                                <span className="block text-[11px] text-slate-400 truncate">
+                                  {catName} · {isParcel && purchaseDate ? `compra ${shortDate(purchaseDate)}` : shortDate(tx.date)}
+                                </span>
+                              </span>
+                              <span className={`text-sm font-semibold tabular-nums whitespace-nowrap ${isIncome ? 'text-emerald-600' : 'text-slate-900'}`}>
+                                {isIncome ? '+ ' : '− '}
+                                {formatBRL(Number(tx.total))}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </Tile>
+                </div>
+
+                {/* Detalhes de "Gastos do mês" */}
+                <Sheet open={openCard === 'spend'} onClose={() => setOpenCard(null)} label="Gastos do mês">
+                  <SheetHeader icon={<Wallet className="w-4 h-4" />} iconCls="bg-[#EBF2FF] text-[#2F68FE]" title="Gastos do mês" subtitle={dashboardData.period?.label} />
+                  <div className="overflow-y-auto px-5 sm:px-6 pb-6">
+                    <span className="block text-4xl font-bold tracking-tight text-slate-900 tabular-nums">{formatBRL(expenses)}</span>
+                    <span className="block mt-1">{diffBadge}</span>
+                    {bars}
+                    <div className="border-t border-slate-100 mt-5 pt-3 space-y-2 text-sm">
+                      <div className="flex justify-between"><span className="text-slate-500">Gastos</span><span className="font-semibold tabular-nums">{formatBRL(expenses)}</span></div>
+                      <div className="flex justify-between"><span className="text-slate-500">Entradas</span><span className="font-semibold text-emerald-600 tabular-nums">{formatBRL(income)}</span></div>
+                      {income > 0 && <div className="flex justify-between"><span className="text-slate-500">Saldo</span><span className="font-semibold tabular-nums">{formatBRL(income - expenses)}</span></div>}
+                      {totalBudget > 0 && <div className="flex justify-between"><span className="text-slate-500">Orçamento do mês</span><span className="font-semibold tabular-nums">{formatBRL(totalBudget)}</span></div>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-5">
+                      <button type="button" onClick={() => { setOpenCard(null); handleOpenDrawer('expense') }} className="rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-slate-800 py-3">Ver gastos</button>
+                      <button type="button" onClick={() => { setOpenCard(null); handleOpenDrawer('income') }} className="rounded-2xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-slate-800 py-3">Ver entradas</button>
+                    </div>
+                  </div>
+                </Sheet>
+
+                {/* Detalhes da fatura */}
+                {cardInvoice && invoiceStatus && (
+                  <Sheet open={openCard === 'invoice'} onClose={() => setOpenCard(null)} label={`Fatura ${cardShort}`}>
+                    <SheetHeader icon={<CreditCard className="w-4 h-4" />} iconCls="bg-orange-50 text-orange-600" title={`Fatura ${cardShort}`}
+                      subtitle={`${shortDate(cardInvoice.cycleStart)} a ${shortDate(cardInvoice.cycleEnd)} · vence ${shortDate(cardInvoice.dueDate)}`} />
+                    <div className="overflow-y-auto px-5 sm:px-6 pb-6">
+                      <span className={`inline-block text-[11px] font-semibold rounded-md px-2 py-0.5 ${invoiceStatus.cls}`}>{invoiceStatus.text}</span>
+                      <span className="block text-xs text-slate-500 mt-3">A pagar</span>
+                      <span className="block text-4xl font-bold tracking-tight text-slate-900 tabular-nums">{formatBRL(cardInvoice.toPay)}</span>
+                      <div className="border-t border-slate-100 mt-5 pt-3 space-y-2 text-sm">
+                        <InvoiceRow label="Despesas" value={cardInvoice.expenses} />
+                        {cardInvoice.credits > 0.009 && <InvoiceRow label="Créditos e estornos" value={-cardInvoice.credits} />}
+                        {cardInvoice.payments > 0.009 && <InvoiceRow label="Pagamentos" value={-cardInvoice.payments} />}
+                        {cardInvoice.carriedCredit > 0.009 && <InvoiceRow label="Já pago (sobra anterior)" value={-cardInvoice.carriedCredit} />}
+                      </div>
+                      {(cardInvoice.upcoming || []).some((u: any) => u.expenses > 0) && (
+                        <div className="mt-5">
+                          <p className="text-xs font-semibold text-slate-500 mb-2">Próximas faturas (parcelas já contratadas)</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(cardInvoice.upcoming || []).map((u: any) => (
+                              <div key={u.dueDate} className="rounded-2xl bg-slate-50 px-3 py-2.5">
+                                <span className="block text-[11px] text-slate-500">{new Date(u.dueDate + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</span>
+                                <span className="block text-sm font-semibold tabular-nums text-slate-900">{formatBRL(u.expenses)}</span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenCard(null)
+                          navigateToTransactionsFiltered({
+                            accountId: cardInvoice.accountId,
+                            paymentMethod: '',
+                            competence: { key: selectedMonthKey || '', label: `Fatura ${cardShort} · vence ${shortDate(cardInvoice.dueDate)}` },
+                          } as any)
+                        }}
+                        className="w-full mt-5 rounded-2xl bg-[#2F68FE] hover:bg-[#2557d6] text-sm font-semibold text-white py-3"
+                      >
+                        Ver lançamentos da fatura
+                      </button>
                     </div>
-                  </div>
-                </div>
-              )
-            })()}
+                  </Sheet>
+                )}
 
-            {cardInvoice && (
-              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-slate-500 inline-flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4" /> Fatura {cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '')}
-                  </span>
-                  <span
-                    className={`text-[11px] font-medium rounded-lg px-2 py-0.5 ${
-                      !cardInvoice.closed
-                        ? 'bg-amber-50 text-amber-800'
-                        : cardInvoice.toPay <= 0.009
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-rose-50 text-rose-700'
-                    }`}
-                  >
-                    {!cardInvoice.closed ? 'Aberta' : cardInvoice.toPay <= 0.009 ? 'Paga' : 'Fechada'} · vence {shortDate(cardInvoice.dueDate)}
-                  </span>
-                </div>
-                <span className="text-xs text-slate-500 mt-3">A pagar</span>
-                <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 tabular-nums">
-                  {formatBRL(cardInvoice.toPay)}
-                </span>
-                <div className="mt-auto pt-4">
-                  <div className="border-t border-slate-100 pt-3 space-y-1.5 text-sm">
-                    <InvoiceRow label="Despesas" value={cardInvoice.expenses} />
-                    {cardInvoice.credits > 0.009 && <InvoiceRow label="Créditos e estornos" value={-cardInvoice.credits} />}
-                    {cardInvoice.payments > 0.009 && <InvoiceRow label="Pagamentos" value={-cardInvoice.payments} />}
-                    {cardInvoice.carriedCredit > 0.009 && <InvoiceRow label="Já pago (sobra anterior)" value={-cardInvoice.carriedCredit} />}
-                  </div>
-                  {(cardInvoice.upcoming || []).some((u: any) => u.expenses > 0) && (
-                    <p className="text-[11px] text-slate-500 mt-2" title="Parcelas já contratadas que entram nas próximas faturas">
-                      Próximas:{' '}
-                      {(cardInvoice.upcoming || []).map((u: any, i: number) => (
-                        <span key={u.dueDate} className={i === 0 ? 'font-semibold text-slate-700' : ''}>
-                          {i > 0 ? ' · ' : ''}
-                          {new Date(u.dueDate + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')} {formatBRL(u.expenses)}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigateToTransactionsFiltered({
-                        accountId: cardInvoice.accountId,
-                        paymentMethod: '',
-                        competence: { key: selectedMonthKey || '', label: `Fatura ${cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '')} · vence ${shortDate(cardInvoice.dueDate)}` },
-                      } as any)
-                    }
-                    className="mt-3 ml-auto flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Ver fatura <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 3. GRID DESKTOP EM 2 COLUNAS: ÚLTIMOS LANÇAMENTOS + ONDE VOCÊ GASTOU */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* COLUNA 1 (7 Colunas no Desktop): ÚLTIMOS LANÇAMENTOS */}
-            <div className="lg:col-span-7 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-              <div>
-                {/* Cabeçalho do Card */}
-                <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-[#EBF2FF] text-[#2F68FE] flex items-center justify-center shrink-0">
-                      <ReceiptText className="w-4 h-4 stroke-[2.2]" />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                        Últimos lançamentos
-                      </h2>
-                      <p className="text-[11px] font-normal text-slate-500">
-                        Atividades recentes deste período
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (periodTx) {
-                        setMonthModal('transactions')
-                        return
-                      }
-                      setFilterType('all')
-                      navigateToTransactionsFiltered({
-                        startDate: dashboardData.period.startDate,
-                        endDate: dashboardData.period.endDate,
-                        paymentMethod: quickFilter === 'card' ? 'credit_card' : quickFilter === 'pix' ? 'PIX' : quickFilter === 'cash' ? 'Dinheiro' : undefined,
-                      })
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <span>Ver todos</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Lista de Transações Recentes */}
-                {recentTransactions.length === 0 ? (
-                  <div className="text-center py-10 text-slate-400 text-xs font-medium">
-                    Nenhum lançamento registrado no período.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {recentTransactions.slice(0, 6).map((tx: any) => {
-                      const isIncome = tx.type === 'income'
-                      const title = tx.canonical_vendors?.canonical_name || tx.vendor || (isIncome ? 'Receita' : 'Despesa')
-                      const catName = tx.categories?.name || tx.category || 'Geral'
-                      const paymentMethod = tx.accounts?.name || tx.payment_method || 'PIX'
-                      const visual = getCategoryVisual(title + ' ' + catName)
-                      const IconComp = visual.icon
-
-                      // Parcela: mostra o selo e a data da compra, como no app do banco.
-                      const isParcel = Number(tx.installment_total) > 1
-                      const purchaseDate: string | null = tx.original_extracted_data?.date || null
-                      // Formatar data relativa clara
-                      let dateLabel = ''
-                      if (isParcel && purchaseDate) {
-                        dateLabel = `compra ${shortDate(purchaseDate)}`
-                      } else if (tx.date) {
-                        const txDate = new Date(tx.date + 'T00:00:00')
-                        const today = new Date()
-                        const yesterday = new Date(today)
-                        yesterday.setDate(yesterday.getDate() - 1)
-
-                        if (txDate.toDateString() === today.toDateString()) {
-                          dateLabel = 'Hoje'
-                        } else if (txDate.toDateString() === yesterday.toDateString()) {
-                          dateLabel = 'Ontem'
-                        } else {
-                          dateLabel = txDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })
-                        }
-                      }
-
-                      return (
-                        <div
-                          key={tx.id}
-                          onClick={() => setSelectedHomeTx(tx)}
-                          className="flex items-center justify-between py-3 px-2.5 -mx-2.5 hover:bg-slate-50/90 rounded-2xl transition-all cursor-pointer group active:scale-[0.99]"
-                        >
-                          {/* Lado Esquerdo: Ícone + Título + Categoria/Conta */}
-                          <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                            <div
-                              className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform"
-                              style={{ backgroundColor: visual.bg, color: visual.color }}
-                            >
-                              <IconComp className="w-4 h-4 stroke-[2]" />
-                            </div>
-
-                            <div className="min-w-0">
-                              <h3 className="font-semibold text-sm text-slate-900 group-hover:text-[#2F68FE] transition-colors truncate">
-                                {title}
-                                {isParcel && (
-                                  <span className="ml-1.5 align-middle text-[10px] font-semibold text-[#2F68FE] bg-[#EBF2FF] rounded-full px-1.5 py-0.5">
-                                    {tx.installment_current}/{tx.installment_total}
-                                  </span>
-                                )}
-                              </h3>
-                              <p className="text-xs text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5">
-                                <span>{catName}</span>
-                                <span className="text-slate-300">•</span>
-                                <span className="text-slate-400">{paymentMethod}</span>
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Lado Direito: Valor + Data */}
-                          <div className="text-right shrink-0">
-                            <span
-                              className={`text-sm sm:text-base font-bold tabular-nums tracking-tight block ${
-                                isIncome ? 'text-emerald-600' : 'text-slate-900'
-                              }`}
-                            >
-                              {isIncome ? '+ ' : '- '}
-                              {formatBRL(Number(tx.total))}
+                {/* Detalhes das assinaturas */}
+                {showSubs && (
+                  <Sheet open={openCard === 'subs'} onClose={() => setOpenCard(null)} label="Assinaturas e contas fixas">
+                    <SheetHeader icon={<Repeat className="w-4 h-4" />} iconCls="bg-violet-50 text-violet-600" title="Assinaturas e contas fixas"
+                      subtitle={`${formatBRL(subscriptions.monthlyTotal)} por mês · ${formatBRL(subscriptions.monthlyTotal * 12)} por ano`} />
+                    <ul className="overflow-y-auto px-5 sm:px-6 pb-6 divide-y divide-slate-100">
+                      {subscriptions.items.map((sub: any) => (
+                        <li key={sub.vendor} className="flex items-center justify-between gap-3 py-3 text-sm">
+                          <span className="min-w-0">
+                            <span className="block truncate text-slate-900 font-medium">
+                              {sub.vendor}
+                              {sub.increased && (
+                                <span className="ml-1.5 text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-amber-50 text-amber-800">
+                                  subiu{sub.previousAmount ? ` (antes ${formatBRL(sub.previousAmount)})` : ''}
+                                </span>
+                              )}
                             </span>
-                            {dateLabel && (
-                              <span className="text-xs text-slate-400 block font-medium mt-0.5">
-                                {dateLabel}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                            <span className="block text-[11px] text-slate-400">{sub.category || 'Sem categoria'} · {sub.months} meses{sub.paymentMethod ? ` · ${sub.paymentMethod}` : ''}</span>
+                          </span>
+                          <span className="font-semibold tabular-nums text-slate-900 whitespace-nowrap">{formatBRL(sub.amount)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Sheet>
                 )}
-              </div>
-            </div>
-
-            {/* COLUNA 2 (5 Colunas no Desktop): ONDE VOCÊ GASTOU */}
-            <div className="lg:col-span-5 bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-              <div>
-                {/* Cabeçalho do Card */}
-                <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                      <PieChart className="w-4 h-4 stroke-[2.2]" />
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                        Onde você gastou
-                      </h2>
-                      <p className="text-[11px] font-normal text-slate-500">
-                        Distribuição por categoria
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (periodTx) {
-                        setMonthModalCategory(null)
-                        setMonthModal('categories')
-                      } else onNavigateToCategories?.()
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <span>Categorias</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {/* Lista de Categorias */}
-                {(!dashboardData.topCategories || dashboardData.topCategories.length === 0) ? (
-                  <div className="text-center py-10 text-slate-400 text-xs font-medium">
-                    Nenhuma despesa registrada no período.
-                  </div>
-                ) : (
-                  <div className="space-y-3.5">
-                    {dashboardData.topCategories.slice(0, 5).map((cat, i) => {
-                      const totalSpent = dashboardData.metrics.totalExpenses || 1
-                      const pct = cat.percentage ?? Number(((cat.total / totalSpent) * 100).toFixed(1))
-                      const catBudget = budgets?.values?.[cat.category]
-                      const used = catBudget ? (cat.total / catBudget) * 100 : null
-                      const visual = getCategoryVisual(cat.category)
-                      const IconComp = visual.icon
-                      const barColors = ['#2F68FE', '#0EA5E9', '#F59E0B', '#EC4899', '#8B5CF6']
-                      const activeColor = barColors[i % barColors.length]
-
-                      return (
-                        <div
-                          key={i}
-                          onClick={() => handleOpenCategoryDetail(cat)}
-                          className="py-2.5 px-3 -mx-3 hover:bg-slate-50/90 rounded-2xl transition-all cursor-pointer group active:scale-[0.99]"
-                        >
-                          <div className="flex items-center justify-between gap-3 mb-2">
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              <div
-                                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs"
-                                style={{ backgroundColor: visual.bg, color: visual.color }}
-                              >
-                                <IconComp className="w-3.5 h-3.5 stroke-[2]" />
-                              </div>
-                              <span className="text-sm font-semibold text-slate-900 group-hover:text-[#2F68FE] transition-colors truncate">
-                                {cat.category}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-sm font-bold text-slate-900 tabular-nums">
-                                {formatBRL(cat.total)}
-                              </span>
-                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums ${
-                                used === null ? 'bg-slate-100 text-slate-600' : used >= 100 ? 'bg-rose-50 text-rose-700' : used >= 80 ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}
-                                title={catBudget ? `Orçamento ${formatBRL(catBudget)}` : undefined}>
-                                {used === null ? `${pct}%` : `${Math.round(used)}% do orç.`}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Barra horizontal suave e moderna */}
-                          <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-300"
-                              style={{
-                                width: `${Math.min(100, Math.max(3, used ?? pct))}%`,
-                                backgroundColor: used === null ? activeColor : used >= 100 ? '#E24B4A' : used >= 80 ? '#EF9F27' : '#639922',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+              </>
+            )
+          })()}
         </>
-      )}
-
-      {dashboardData && subscriptions.items.length > 0 && quickFilter !== 'cash' && (
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-                <Repeat className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-slate-900 tracking-tight">Assinaturas e contas fixas</h2>
-                <p className="text-[11px] text-slate-500">
-                  {formatBRL(subscriptions.monthlyTotal)} por mês · {formatBRL(subscriptions.monthlyTotal * 12)} por ano
-                </p>
-              </div>
-            </div>
-            {subscriptions.items.length > 6 && (
-              <button type="button" onClick={() => setShowAllSubs((v) => !v)} className="text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg">
-                {showAllSubs ? 'Mostrar menos' : `Ver todas (${subscriptions.items.length})`}
-              </button>
-            )}
-          </div>
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 divide-y sm:divide-y-0 divide-slate-100">
-            {(showAllSubs ? subscriptions.items : subscriptions.items.slice(0, 6)).map((sub: any) => (
-              <li key={sub.vendor} className="flex items-center justify-between gap-2 py-2 text-sm">
-                <span className="min-w-0 truncate text-slate-900">
-                  {sub.vendor}
-                  {sub.increased && (
-                    <span className="ml-1.5 text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-amber-50 text-amber-800"
-                      title={sub.previousAmount ? `Antes: ${formatBRL(sub.previousAmount)}` : undefined}>subiu</span>
-                  )}
-                  <span className="block text-[11px] text-slate-400">{sub.category || 'Sem categoria'} · {sub.months} meses · {sub.paymentMethod || ''}</span>
-                </span>
-                <span className="font-semibold tabular-nums text-slate-900 whitespace-nowrap">{formatBRL(sub.amount)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
 
       <CategoryReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} onChanged={() => fetchDashboard()} />
@@ -925,6 +802,63 @@ export function DashboardTab({
 
 function shortDate(iso?: string | null): string {
   return iso ? iso.split('-').reverse().slice(0, 2).join('/') : ''
+}
+
+/** Card da grade: mostra o essencial; tocar (ou Enter) abre os detalhes. */
+function Tile({
+  className = '',
+  icon,
+  iconCls,
+  label,
+  onOpen,
+  children,
+}: {
+  className?: string
+  icon: React.ReactNode
+  iconCls: string
+  label: string
+  onOpen: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`Abrir ${label}`}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      className={`group bg-white border border-slate-200/80 rounded-[26px] p-4 sm:p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col min-w-0 cursor-pointer select-none transition-all duration-150 hover:border-slate-300 hover:shadow-[0_4px_16px_rgba(15,23,42,0.06)] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2F68FE]/40 ${className}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${iconCls}`}>{icon}</span>
+          <span className="text-xs font-semibold text-slate-600 truncate">{label}</span>
+        </span>
+        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 transition-colors" />
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function SheetHeader({ icon, iconCls, title, subtitle }: { icon: React.ReactNode; iconCls: string; title: string; subtitle?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-7 sm:pt-6 pb-4">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${iconCls}`}>{icon}</span>
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-slate-900 truncate">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-500 truncate">{subtitle}</p>}
+        </div>
+      </div>
+      <SheetCloseButton />
+    </div>
+  )
 }
 
 function InvoiceRow({ label, value }: { label: string; value: number }) {

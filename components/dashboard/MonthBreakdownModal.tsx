@@ -7,7 +7,8 @@
  * Usa exatamente os lançamentos do resumo do mês (no cartão, pela fatura), então os totais batem com a tela.
  */
 import React, { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
+import { Sheet, SheetCloseButton } from '@/components/ui/Sheet'
 import { formatBRL } from '@/lib/formatters'
 
 interface CategoryItem {
@@ -55,13 +56,6 @@ export function MonthBreakdownModal({
   const [budgetError, setBudgetError] = useState('')
   useEffect(() => setOpen(initialCategory ?? null), [initialCategory, mode])
 
-  useEffect(() => {
-    if (!mode) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mode, onClose])
-
   // Parcelas aparecem na data da compra, como no app do banco (e não na data prevista da parcela).
   const shownDate = (t: any): string =>
     (Number(t.installment_total) > 1 && t.original_extracted_data?.date) || t.date || ''
@@ -81,15 +75,8 @@ export function MonthBreakdownModal({
   if (!mode) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 p-0 sm:p-6" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={mode === 'categories' ? 'Categorias do mês' : 'Lançamentos do mês'}
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white w-full sm:max-w-2xl max-h-[88vh] rounded-t-3xl sm:rounded-3xl shadow-xl flex flex-col overflow-hidden"
-      >
-        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-slate-100">
+    <Sheet open onClose={onClose} label={mode === 'categories' ? 'Categorias do mês' : 'Lançamentos do mês'}>
+        <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-6 pb-4 border-b border-slate-100">
           <div className="min-w-0">
             <h2 className="text-base font-bold text-slate-900">
               {mode === 'categories' ? 'Categorias' : 'Lançamentos'} · {periodLabel}
@@ -107,9 +94,7 @@ export function MonthBreakdownModal({
                 Revisar lojas
               </button>
             )}
-            <button type="button" onClick={onClose} aria-label="Fechar" className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
-              <X className="w-4 h-4" />
-            </button>
+            <SheetCloseButton />
           </div>
         </div>
         {mode === 'categories' && budgets && !budgets.available && (
@@ -230,8 +215,7 @@ export function MonthBreakdownModal({
               ))
             ))}
         </div>
-      </div>
-    </div>
+    </Sheet>
   )
 }
 
