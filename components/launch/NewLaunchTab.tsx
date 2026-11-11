@@ -17,6 +17,7 @@ import { LaunchInputCard } from './LaunchInputCard'
 import { BatchReviewSection } from './BatchReviewSection'
 import { SingleReviewForm } from './SingleReviewForm'
 import { ItemsDrawer } from './ItemsDrawer'
+import { StatementImportPanel } from './StatementImportPanel'
 
 export interface AccountOption {
   id: string
@@ -63,6 +64,7 @@ export function NewLaunchTab({
   // Estado da Tela 1 (Entrada Unificada)
   const [quickTextInput, setQuickTextInput] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [statementFile, setStatementFile] = useState<File | null>(null)
   const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
   const [interpreting, setInterpreting] = useState(false)
@@ -267,6 +269,14 @@ export function NewLaunchTab({
 
   // Manipulação de Arquivo selecionado/arrastado
   function handleFileSelected(file: File) {
+    // Fatura de cartão (PDF, OFX, CSV de qualquer banco): importação em lote (ver StatementImportPanel)
+    if (file.type === 'application/pdf' || file.type === 'text/csv' || /\.(pdf|ofx|qfx|csv|txt)$/i.test(file.name)) {
+      setLaunchError('')
+      setLaunchSuccessMessage(null)
+      setStatementFile(file)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
     setSelectedFile(file)
     setFilePreviewUrl(URL.createObjectURL(file))
     setLaunchError('')
@@ -543,8 +553,21 @@ export function NewLaunchTab({
         </div>
       )}
 
+      {/* IMPORTAÇÃO DE FATURA PDF */}
+      {launchStep === 'input' && statementFile && (
+        <StatementImportPanel
+          file={statementFile}
+          onClose={() => setStatementFile(null)}
+          onImported={async (message) => {
+            setStatementFile(null)
+            setLaunchSuccessMessage(message)
+            if (onSaveSuccess) await onSaveSuccess()
+          }}
+        />
+      )}
+
       {/* ESTADO 1: ENTRADA */}
-      {launchStep === 'input' && (
+      {launchStep === 'input' && !statementFile && (
         <LaunchInputCard
           quickTextInput={quickTextInput}
           setQuickTextInput={setQuickTextInput}

@@ -64,6 +64,36 @@ export async function GET(req: NextRequest) {
       offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!, 10) : undefined,
     }
 
+    // competence=YYYY-MM: mês como na Visão Geral (cartão pela fatura, demais pela data).
+    const competence = searchParams.get('competence')
+    if (competence && /^\d{4}-\d{2}$/.test(competence)) {
+      const { addMonthsToDate } = await import('@/lib/dateUtils')
+      const { listAccounts } = await import('@/lib/queries')
+      const { makeCompetence } = await import('@/lib/queries/dashboardExtras')
+      const wide = await listTransactions({
+        ...filters,
+        startDate: addMonthsToDate(`${competence}-01`, -2),
+        endDate: addMonthsToDate(`${competence}-01`, 3),
+        limit: 2000,
+        offset: 0,
+      })
+      const accounts = await listAccounts({ activeOnly: false, userId: auth.userId })
+      const accountsMap = Object.fromEntries(accounts.map((a: any) => [a.id, a]))
+      const competenceOf = makeCompetence(accountsMap, wide.transactions as any[])
+      const rows = (wide.transactions as any[]).filter((t) => competenceOf(t) === competence)
+      return NextResponse.json(
+        {
+          ok: true,
+          transactions: rows,
+          total_count: rows.length,
+          total_amount: Math.round(rows.reduce((s, t) => s + (t.type === 'income' ? 0 : Number(t.total) || 0), 0) * 100) / 100,
+          has_more: false,
+          competence,
+        },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0' } },
+      )
+    }
+
     const result = await listTransactions(filters)
     return NextResponse.json(
       { ok: true, ...result },

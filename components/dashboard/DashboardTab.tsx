@@ -17,6 +17,10 @@ import {
   PieChart,
   ArrowDownLeft,
   ArrowUpRight,
+  Info,
+  Search,
+  Bell,
+  Repeat,
 } from 'lucide-react'
 import type { Account, TransactionRecord } from '@/lib/schema'
 import type { DashboardSummary } from '@/lib/queries'
@@ -26,6 +30,8 @@ import { MonthPicker } from '@/components/ui/MonthPicker'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
 import { CategoryDetailPanel } from './CategoryDetailPanel'
 import { CashFlowDrawer } from './CashFlowDrawer'
+import { MonthBreakdownModal } from './MonthBreakdownModal'
+import { CategoryReviewModal } from './CategoryReviewModal'
 import { TransactionDetailModal } from '@/components/transactions/TransactionDetailModal'
 
 export interface DashboardTabProps {
@@ -142,9 +148,42 @@ export function DashboardTab({
 
   // Lançamentos recentes
   const recentTransactions = dashboardData?.recentTransactions || []
+  // Todos os lançamentos do mês exibido (cartão pela fatura): base do pop-up, dos painéis e do drawer.
+  const periodTx: any[] | null = (dashboardData as any)?.periodTransactions ?? null
+  const [monthModal, setMonthModal] = useState<'categories' | 'transactions' | null>(null)
+  const [monthModalCategory, setMonthModalCategory] = useState<string | null>(null)
+  const [reviewOpen, setReviewOpen] = useState(false)
+  const [searchText, setSearchText] = useState('')
+  const [showAllSubs, setShowAllSubs] = useState(false)
+  const budgets = (dashboardData as any)?.budgets as { available: boolean; values: Record<string, number> } | undefined
+  const history = ((dashboardData as any)?.monthlyHistory || []) as Array<{ month: string; label: string; total: number }>
+  const subscriptions = ((dashboardData as any)?.subscriptions || { items: [], monthlyTotal: 0 }) as { items: any[]; monthlyTotal: number }
+  const totalBudget = budgets?.values ? Object.values(budgets.values).reduce((s, v) => s + v, 0) : 0
+
+  async function saveBudgets(values: Record<string, number>): Promise<string | null> {
+    try {
+      const res = await fetchWithAuth('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'budgets', value: values }),
+      })
+      const d = await res.json()
+      if (!d.ok) return d.error || 'Falha ao salvar orçamento.'
+      fetchDashboard()
+      return null
+    } catch {
+      return 'Falha de conexão ao salvar orçamento.'
+    }
+  }
 
   // Abrir Detalhe da Categoria
   async function handleOpenCategoryDetail(cat: any) {
+    // Mês selecionado: abre o pop-up do mês já com a categoria aberta (mesmos lançamentos dos totais).
+    if (periodTx) {
+      setMonthModalCategory(cat.category)
+      setMonthModal('categories')
+      return
+    }
     setSelectedCategoryDetail(cat)
     setLoadingCategoryTx(true)
     setCategoryTxError('')
@@ -183,6 +222,16 @@ export function DashboardTab({
 
   // Abrir Drawer de Entradas ou Saídas
   async function handleOpenDrawer(type: 'income' | 'expense') {
+    if (periodTx) {
+      setDrawerType(type)
+      setDrawerError('')
+      setDrawerTxList(
+        periodTx
+          .filter((t) => (type === 'income' ? t.type === 'income' : t.type !== 'income'))
+          .sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
+      )
+      return
+    }
     setDrawerType(type)
     setLoadingDrawerTx(true)
     setDrawerError('')
@@ -237,21 +286,54 @@ export function DashboardTab({
     }
   }
 
+  // Fatura do cartão do mês exibido (some nos filtros Pix e Dinheiro).
+  const cardInvoice: any =
+    quickFilter === 'pix' || quickFilter === 'cash' ? null : (dashboardData?.cardInvoices || [])[0] || null
+
   return (
     <section className="space-y-6 max-w-6xl mx-auto pb-12 font-sans">
       {/* 1. BARRA SUPERIOR: SELETOR DE PERÍODO & FILTROS RÁPIDOS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl px-4 py-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 whitespace-nowrap">
           <MonthPicker
             monthOffset={monthOffset}
             onSelectMonthOffset={(offset) => {
               handleMonthNavigate(offset - monthOffset)
             }}
           />
+          {cardInvoice && (
+            <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 bg-slate-50 border border-slate-200/70 rounded-lg px-2 py-1 whitespace-nowrap shrink-0">
+              {shortDate(cardInvoice.cycleStart)} a {shortDate(cardInvoice.cycleEnd)}
+              <span
+                tabIndex={0}
+                className="text-slate-400 hover:text-slate-600 cursor-help"
+                title="No cartão, o mês segue a fatura: entram as compras desse período, como no app do banco. Pix, dinheiro e entradas seguem a data do lançamento."
+                aria-label="Como o período é calculado"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </span>
+            </span>
+          )}
         </div>
 
         {/* Filtros rápidos: Tudo, Cartão, PIX, Dinheiro */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (searchText.trim()) navigateToTransactionsFiltered({ search: searchText.trim() } as any)
+            }}
+            className="hidden xl:flex items-center gap-1.5 bg-slate-50 border border-slate-200/60 rounded-xl px-2.5 py-1.5 mr-1 shrink-0"
+          >
+            <Search className="w-3.5 h-3.5 text-slate-400" />
+            <input
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder='Buscar ("Shopee", "mercado"…)'
+              aria-label="Buscar lançamentos"
+              className="bg-transparent text-xs w-40 focus:outline-none text-slate-700"
+            />
+          </form>
           <button
             type="button"
             onClick={() => handleSelectQuickFilter('all')}
@@ -322,66 +404,129 @@ export function DashboardTab({
         </div>
       ) : (
         <>
-          {/* 2. CARD HERO PRINCIPAL (Saldo, Entradas e Gastos com alto contraste e profundidade) */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-7 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] transition-all">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-              {/* Saldo Principal */}
-              <div className="space-y-1">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block">
-                  Saldo do período
-                </span>
-                <div className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 tabular-nums">
-                  {formatBRL(dashboardData.metrics?.balance ?? 0)}
-                </div>
-              </div>
+          {cardInvoice?.missingStatements?.length > 0 && (
+            <div className="flex items-center gap-3 bg-[#EBF2FF] text-[#2F68FE] rounded-2xl px-4 py-3 text-sm">
+              <Bell className="w-4 h-4 shrink-0" />
+              <span className="flex-1">
+                {cardInvoice.missingStatements.length === 1
+                  ? `A fatura que venceu em ${shortDate(cardInvoice.missingStatements[0])} ainda não foi importada.`
+                  : `${cardInvoice.missingStatements.length} faturas ainda não foram importadas (${cardInvoice.missingStatements.map((d: string) => shortDate(d)).join(', ')}).`}{' '}
+                <span className="text-[#2F68FE]/70">Leva 1 minuto.</span>
+              </span>
+              {onOpenNewLaunch && (
+                <button type="button" onClick={() => onOpenNewLaunch('expense')} className="font-semibold whitespace-nowrap hover:underline">
+                  Importar fatura →
+                </button>
+              )}
+            </div>
+          )}
 
-              {/* Blocos de Entradas e Gastos com Cards Interativos */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 lg:min-w-[420px]">
-                {/* Card Entradas */}
-                <div
-                  onClick={() => handleOpenDrawer('income')}
-                  className="bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200/70 rounded-2xl p-4 transition-all group cursor-pointer shadow-2xs hover:shadow-xs flex items-center justify-between gap-3"
-                  title="Clique para ver extrato de entradas"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                      <ArrowDownLeft className="w-5 h-5 stroke-[2.5]" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-emerald-900/70 block">
-                        Entradas
-                      </span>
-                      <span className="text-base sm:text-lg font-bold text-emerald-700 tabular-nums tracking-tight block">
-                        {formatBRL(dashboardData.metrics?.totalIncome ?? 0)}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-emerald-500/60 group-hover:text-emerald-700 group-hover:translate-x-0.5 transition-all shrink-0" />
-                </div>
-
-                {/* Card Gastos */}
+          {/* 2. CARDS PRINCIPAIS: gastos do mês + fatura do cartão (como no app do banco) */}
+          <div className={`grid grid-cols-1 gap-4 ${cardInvoice ? 'md:grid-cols-2' : ''}`}>
+            {(() => {
+              const expenses = dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0
+              const income = dashboardData.metrics?.totalIncome ?? 0
+              const diff = dashboardData.metrics?.comparison?.differencePercentage
+              return (
                 <div
                   onClick={() => handleOpenDrawer('expense')}
-                  className="bg-rose-50/70 hover:bg-rose-50 border border-rose-200/70 rounded-2xl p-4 transition-all group cursor-pointer shadow-2xs hover:shadow-xs flex items-center justify-between gap-3"
-                  title="Clique para ver extrato de gastos"
+                  className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] cursor-pointer hover:border-slate-300 transition-colors flex flex-col"
+                  title="Ver todos os gastos do mês"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                      <ArrowUpRight className="w-5 h-5 stroke-[2.5]" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold text-rose-900/70 block">
-                        Gastos
-                      </span>
-                      <span className="text-base sm:text-lg font-bold text-rose-700 tabular-nums tracking-tight block">
-                        {formatBRL(dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0)}
-                      </span>
+                  <span className="text-xs font-medium text-slate-500">Gastos do mês</span>
+                  <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 tabular-nums mt-1">
+                    {formatBRL(expenses)}
+                  </span>
+                  {diff !== null && diff !== undefined && Number.isFinite(diff) && (
+                    <span className={`text-xs font-medium mt-1 inline-flex items-center gap-1 ${diff > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {diff > 0 ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownLeft className="w-3.5 h-3.5" />}
+                      {Math.abs(Math.round(diff))}% vs {dashboardData.period?.previousLabel?.split(' de ')[0]?.toLowerCase() || 'mês anterior'}
+                    </span>
+                  )}
+                  {history.length > 1 && (
+                    <MonthBars history={history} budget={totalBudget} current={history[history.length - 1]?.month} />
+                  )}
+                  <div className="mt-auto pt-4">
+                    <div className="border-t border-slate-100 pt-3 space-y-1.5 text-sm">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleOpenDrawer('income')
+                        }}
+                        className="w-full flex justify-between items-center text-left cursor-pointer"
+                      >
+                        <span className="text-slate-500">Entradas</span>
+                        <span className="font-semibold text-emerald-600 tabular-nums">{formatBRL(income)}</span>
+                      </button>
+                      {income > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">Saldo</span>
+                          <span className="font-semibold text-slate-900 tabular-nums">{formatBRL(income - expenses)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-rose-500/60 group-hover:text-rose-700 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </div>
+              )
+            })()}
+
+            {cardInvoice && (
+              <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-slate-500 inline-flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4" /> Fatura {cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '')}
+                  </span>
+                  <span
+                    className={`text-[11px] font-medium rounded-lg px-2 py-0.5 ${
+                      !cardInvoice.closed
+                        ? 'bg-amber-50 text-amber-800'
+                        : cardInvoice.toPay <= 0.009
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-rose-50 text-rose-700'
+                    }`}
+                  >
+                    {!cardInvoice.closed ? 'Aberta' : cardInvoice.toPay <= 0.009 ? 'Paga' : 'Fechada'} · vence {shortDate(cardInvoice.dueDate)}
+                  </span>
+                </div>
+                <span className="text-xs text-slate-500 mt-3">A pagar</span>
+                <span className="text-3xl sm:text-4xl font-bold tracking-tight text-slate-900 tabular-nums">
+                  {formatBRL(cardInvoice.toPay)}
+                </span>
+                <div className="mt-auto pt-4">
+                  <div className="border-t border-slate-100 pt-3 space-y-1.5 text-sm">
+                    <InvoiceRow label="Despesas" value={cardInvoice.expenses} />
+                    {cardInvoice.credits > 0.009 && <InvoiceRow label="Créditos e estornos" value={-cardInvoice.credits} />}
+                    {cardInvoice.payments > 0.009 && <InvoiceRow label="Pagamentos" value={-cardInvoice.payments} />}
+                    {cardInvoice.carriedCredit > 0.009 && <InvoiceRow label="Já pago (sobra anterior)" value={-cardInvoice.carriedCredit} />}
+                  </div>
+                  {(cardInvoice.upcoming || []).some((u: any) => u.expenses > 0) && (
+                    <p className="text-[11px] text-slate-500 mt-2" title="Parcelas já contratadas que entram nas próximas faturas">
+                      Próximas:{' '}
+                      {(cardInvoice.upcoming || []).map((u: any, i: number) => (
+                        <span key={u.dueDate} className={i === 0 ? 'font-semibold text-slate-700' : ''}>
+                          {i > 0 ? ' · ' : ''}
+                          {new Date(u.dueDate + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')} {formatBRL(u.expenses)}
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigateToTransactionsFiltered({
+                        accountId: cardInvoice.accountId,
+                        paymentMethod: '',
+                        competence: { key: history[history.length - 1]?.month, label: `Fatura ${cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '')} · vence ${shortDate(cardInvoice.dueDate)}` },
+                      } as any)
+                    }
+                    className="mt-3 ml-auto flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                  >
+                    Ver fatura <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* 3. GRID DESKTOP EM 2 COLUNAS: ÚLTIMOS LANÇAMENTOS + ONDE VOCÊ GASTOU */}
@@ -408,6 +553,10 @@ export function DashboardTab({
                   <button
                     type="button"
                     onClick={() => {
+                      if (periodTx) {
+                        setMonthModal('transactions')
+                        return
+                      }
                       setFilterType('all')
                       navigateToTransactionsFiltered({
                         startDate: dashboardData.period.startDate,
@@ -437,9 +586,14 @@ export function DashboardTab({
                       const visual = getCategoryVisual(title + ' ' + catName)
                       const IconComp = visual.icon
 
+                      // Parcela: mostra o selo e a data da compra, como no app do banco.
+                      const isParcel = Number(tx.installment_total) > 1
+                      const purchaseDate: string | null = tx.original_extracted_data?.date || null
                       // Formatar data relativa clara
                       let dateLabel = ''
-                      if (tx.date) {
+                      if (isParcel && purchaseDate) {
+                        dateLabel = `compra ${shortDate(purchaseDate)}`
+                      } else if (tx.date) {
                         const txDate = new Date(tx.date + 'T00:00:00')
                         const today = new Date()
                         const yesterday = new Date(today)
@@ -472,6 +626,11 @@ export function DashboardTab({
                             <div className="min-w-0">
                               <h3 className="font-semibold text-sm text-slate-900 group-hover:text-[#2F68FE] transition-colors truncate">
                                 {title}
+                                {isParcel && (
+                                  <span className="ml-1.5 align-middle text-[10px] font-semibold text-[#2F68FE] bg-[#EBF2FF] rounded-full px-1.5 py-0.5">
+                                    {tx.installment_current}/{tx.installment_total}
+                                  </span>
+                                )}
                               </h3>
                               <p className="text-xs text-slate-500 font-medium truncate mt-0.5 flex items-center gap-1.5">
                                 <span>{catName}</span>
@@ -526,7 +685,12 @@ export function DashboardTab({
 
                   <button
                     type="button"
-                    onClick={onNavigateToCategories}
+                    onClick={() => {
+                      if (periodTx) {
+                        setMonthModalCategory(null)
+                        setMonthModal('categories')
+                      } else onNavigateToCategories?.()
+                    }}
                     className="inline-flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
                   >
                     <span>Categorias</span>
@@ -544,6 +708,8 @@ export function DashboardTab({
                     {dashboardData.topCategories.slice(0, 5).map((cat, i) => {
                       const totalSpent = dashboardData.metrics.totalExpenses || 1
                       const pct = cat.percentage ?? Number(((cat.total / totalSpent) * 100).toFixed(1))
+                      const catBudget = budgets?.values?.[cat.category]
+                      const used = catBudget ? (cat.total / catBudget) * 100 : null
                       const visual = getCategoryVisual(cat.category)
                       const IconComp = visual.icon
                       const barColors = ['#2F68FE', '#0EA5E9', '#F59E0B', '#EC4899', '#8B5CF6']
@@ -572,8 +738,10 @@ export function DashboardTab({
                               <span className="text-sm font-bold text-slate-900 tabular-nums">
                                 {formatBRL(cat.total)}
                               </span>
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 tabular-nums">
-                                {pct}%
+                              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums ${
+                                used === null ? 'bg-slate-100 text-slate-600' : used >= 100 ? 'bg-rose-50 text-rose-700' : used >= 80 ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}
+                                title={catBudget ? `Orçamento ${formatBRL(catBudget)}` : undefined}>
+                                {used === null ? `${pct}%` : `${Math.round(used)}% do orç.`}
                               </span>
                             </div>
                           </div>
@@ -583,8 +751,8 @@ export function DashboardTab({
                             <div
                               className="h-full rounded-full transition-all duration-300"
                               style={{
-                                width: `${Math.min(100, Math.max(3, pct))}%`,
-                                backgroundColor: activeColor,
+                                width: `${Math.min(100, Math.max(3, used ?? pct))}%`,
+                                backgroundColor: used === null ? activeColor : used >= 100 ? '#E24B4A' : used >= 80 ? '#EF9F27' : '#639922',
                               }}
                             />
                           </div>
@@ -597,6 +765,71 @@ export function DashboardTab({
             </div>
           </div>
         </>
+      )}
+
+      {dashboardData && subscriptions.items.length > 0 && quickFilter !== 'cash' && (
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-5 sm:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+                <Repeat className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900 tracking-tight">Assinaturas e contas fixas</h2>
+                <p className="text-[11px] text-slate-500">
+                  {formatBRL(subscriptions.monthlyTotal)} por mês · {formatBRL(subscriptions.monthlyTotal * 12)} por ano
+                </p>
+              </div>
+            </div>
+            {subscriptions.items.length > 6 && (
+              <button type="button" onClick={() => setShowAllSubs((v) => !v)} className="text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg">
+                {showAllSubs ? 'Mostrar menos' : `Ver todas (${subscriptions.items.length})`}
+              </button>
+            )}
+          </div>
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 divide-y sm:divide-y-0 divide-slate-100">
+            {(showAllSubs ? subscriptions.items : subscriptions.items.slice(0, 6)).map((sub: any) => (
+              <li key={sub.vendor} className="flex items-center justify-between gap-2 py-2 text-sm">
+                <span className="min-w-0 truncate text-slate-900">
+                  {sub.vendor}
+                  {sub.increased && (
+                    <span className="ml-1.5 text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-amber-50 text-amber-800"
+                      title={sub.previousAmount ? `Antes: ${formatBRL(sub.previousAmount)}` : undefined}>subiu</span>
+                  )}
+                  <span className="block text-[11px] text-slate-400">{sub.category || 'Sem categoria'} · {sub.months} meses · {sub.paymentMethod || ''}</span>
+                </span>
+                <span className="font-semibold tabular-nums text-slate-900 whitespace-nowrap">{formatBRL(sub.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <CategoryReviewModal open={reviewOpen} onClose={() => setReviewOpen(false)} onChanged={() => fetchDashboard()} />
+
+      {/* Pop-up do mês: categorias (com as despesas de cada uma) e todos os lançamentos */}
+      {dashboardData && (
+        <MonthBreakdownModal
+          mode={monthModal}
+          onClose={() => setMonthModal(null)}
+          periodLabel={dashboardData.period?.label || ''}
+          rangeLabel={cardInvoice ? `${shortDate(cardInvoice.cycleStart)} a ${shortDate(cardInvoice.cycleEnd)}` : null}
+          transactions={periodTx || []}
+          categories={dashboardData.topCategories || []}
+          totalExpenses={dashboardData.metrics?.totalExpenses ?? 0}
+          initialCategory={monthModalCategory}
+          getVisual={getCategoryVisual}
+          budgets={budgets}
+          onSaveBudgets={saveBudgets}
+          onReviewCategories={() => {
+            setMonthModal(null)
+            setReviewOpen(true)
+          }}
+          onSelectTx={(tx) => {
+            setMonthModal(null)
+            setSelectedHomeTx(tx)
+          }}
+        />
       )}
 
       {/* Painel Lateral de Detalhes da Categoria */}
@@ -677,5 +910,58 @@ export function DashboardTab({
         />
       )}
     </section>
+  )
+}
+
+
+function shortDate(iso?: string | null): string {
+  return iso ? iso.split('-').reverse().slice(0, 2).join('/') : ''
+}
+
+function InvoiceRow({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex justify-between items-center">
+      <span className="text-slate-500">{label}</span>
+      <span className={`font-semibold tabular-nums ${value < 0 ? 'text-emerald-600' : 'text-slate-900'}`}>
+        {value < 0 ? `− ${formatBRL(-value)}` : formatBRL(value)}
+      </span>
+    </div>
+  )
+}
+
+
+/** Barras dos últimos meses com a linha do orçamento mensal (soma dos orçamentos das categorias). */
+function MonthBars({ history, budget, current }: { history: Array<{ month: string; label: string; total: number }>; budget: number; current?: string }) {
+  const max = Math.max(1, budget, ...history.map((h) => h.total))
+  return (
+    <div className="mt-4" aria-label="Gastos dos últimos meses">
+      <div className="relative flex items-end gap-2 h-24">
+        {budget > 0 && (
+          <div className="absolute left-0 right-0 border-t border-dashed border-slate-300" style={{ bottom: `${(budget / max) * 100}%` }}>
+            <span className="absolute right-0 -top-4 text-[10px] text-slate-400">orçamento {formatBRL(budget)}</span>
+          </div>
+        )}
+        {history.map((h) => {
+          const over = budget > 0 && h.total > budget
+          const isCurrent = h.month === current
+          return (
+            <div key={h.month} className="flex-1 flex flex-col items-center justify-end h-full" title={`${h.label}: ${formatBRL(h.total)}`}>
+              <div
+                className="w-full rounded-t-md"
+                style={{
+                  height: `${Math.max(2, (h.total / max) * 100)}%`,
+                  backgroundColor: over ? '#F09595' : isCurrent ? '#2F68FE' : '#B5D4F4',
+                }}
+              />
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex gap-2 mt-1">
+        {history.map((h) => (
+          <span key={h.month} className={`flex-1 text-center text-[10px] ${h.month === current ? 'font-semibold text-slate-700' : 'text-slate-400'}`}>{h.label}</span>
+        ))}
+      </div>
+    </div>
   )
 }

@@ -88,7 +88,7 @@ export function LaunchInputCard({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,application/pdf"
+          accept="image/*,application/pdf,.ofx,.qfx,.csv,.txt,text/csv"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0]
@@ -147,6 +147,7 @@ export function LaunchInputCard({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={interpreting}
+            title="Foto do comprovante, a fatura do cartão (PDF, OFX ou CSV) ou o extrato da conta (PDF) para importar os gastos"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#EBEEF2] bg-white hover:bg-[#F2F4F7] text-xs font-medium text-[#475467] transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
           >
             <Paperclip className="w-3.5 h-3.5 text-[#667085]" />

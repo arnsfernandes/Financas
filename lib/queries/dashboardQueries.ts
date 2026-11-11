@@ -6,6 +6,8 @@ import {
 import { getCardInvoiceDates, isImmediatePayment } from '../billingCycles'
 import { listCategories, normalizeCategoryName, translateCategory } from './categoryQueries'
 import { getEffectiveDate, buildEffectiveDateOrFilter } from './transactionQueries'
+import { cardCompetenceMonth } from '../invoiceCompetence'
+import { addMonthsToDate } from '../dateUtils'
 
 export interface DashboardFilter {
   userId?: string
@@ -100,6 +102,28 @@ export interface DashboardInsight {
   description: string
 }
 
+export interface CardInvoiceStatus {
+  accountId: string
+  accountName: string
+  dueDate: string
+  expenses: number
+  credits: number
+  payments: number
+  carriedCredit: number
+  toPay: number
+  /** veio do resumo impresso de uma fatura importada (valor exato do banco) */
+  fromStatement: boolean
+  /** próximas faturas já comprometidas pelas parcelas (estimativa: despesas já lançadas) */
+  upcoming: Array<{ dueDate: string; expenses: number }>
+  /** faturas fechadas que ainda não foram importadas (vencimentos) */
+  missingStatements: string[]
+  /** período de compras da fatura (início e fechamento) */
+  cycleStart: string
+  cycleEnd: string
+  /** fechamento já passou */
+  closed: boolean
+}
+
 export interface DashboardSummary {
   period: {
     type: 'week' | 'month' | 'year' | 'custom'
@@ -109,7 +133,17 @@ export interface DashboardSummary {
     previousLabel: string
     previousStartDate: string
     previousEndDate: string
+    /** No modo mês: gastos no cartão seguem a fatura. Ex.: "Cartão Inter: fatura que vence 15/12" */
+    cardInvoiceNote?: string | null
   }
+  /** Fatura do cartão do mês exibido, calculada como o banco: despesas − créditos − pagamentos − sobra anterior */
+  cardInvoices?: CardInvoiceStatus[]
+  /** Gastos dos últimos 6 meses (mesmas regras do mês) */
+  monthlyHistory?: Array<{ month: string; label: string; total: number }>
+  /** Assinaturas e contas fixas detectadas */
+  subscriptions?: { items: any[]; monthlyTotal: number }
+  /** Orçamento mensal por categoria (null se a tabela de preferências ainda não existe) */
+  budgets?: { available: boolean; values: Record<string, number> }
   selectedAccountId?: string | null
   selectedPaymentMethod?: string | null
   metrics: {
@@ -149,6 +183,8 @@ export interface DashboardSummary {
   topVendors: TopVendorItem[]
   accountMetrics: AccountMetric[]
   recentTransactions: any[]
+  /** todos os lançamentos do período exibido (no mês: cartão pela fatura), mais recentes primeiro */
+  periodTransactions?: any[]
   dailyExpenses: DailyExpenseItem[]
   // Upcoming Financial Commitments in next 30 days
   upcomingCommitments: {
@@ -385,13 +421,19 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
   allEndCandidates.sort()
   const queryMaxDate = allEndCandidates[allEndCandidates.length - 1]
 
-  const effectiveFilter = buildEffectiveDateOrFilter(queryMinDate, queryMaxDate)
+  // Gastos no cartão contam no mês da fatura, que atravessa o mês do calendário: busca ~45 dias a mais.
+  const widen = (iso: string, days: number) => {
+    const d = new Date(iso + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() + days)
+    return d.toISOString().slice(0, 10)
+  }
+  const effectiveFilter = buildEffectiveDateOrFilter(widen(queryMinDate, -45), widen(queryMaxDate, 45))
   const dateOrFilter = effectiveFilter ? `${effectiveFilter},is_recurring.eq.true,installment_total.gt.1` : 'is_recurring.eq.true,installment_total.gt.1'
 
   // Fetch only transactions within relevant date boundaries plus active recurrences and installments
   let txQuery = supabase
     .from('transactions')
-    .select('id, type, account_id, category_id, vendor, vendor_id, date, time, currency, category, total, payment_method, notes, created_at, is_recurring, recurrence_frequency, recurrence_next_date, recurrence_status, recurrence_parent_id, recurrence_cycle_date, installment_group_id, installment_current, installment_total, installment_amount, categories(id, name, icon, color), accounts(id, name, type, institution), canonical_vendors(id, canonical_name, normalized_key)')
+    .select('id, type, account_id, category_id, vendor, vendor_id, date, time, currency, category, total, payment_method, notes, created_at, is_recurring, recurrence_frequency, recurrence_next_date, recurrence_status, recurrence_parent_id, recurrence_cycle_date, installment_group_id, installment_current, installment_total, installment_amount, original_extracted_data, categories(id, name, icon, color), accounts(id, name, type, institution), canonical_vendors(id, canonical_name, normalized_key)')
     .or(dateOrFilter)
     .order('created_at', { ascending: false })
 
@@ -557,8 +599,35 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
 
   const { parseVendor } = await import('../canonicalVendor')
 
+  // Mês por mês (period 'month'): gasto no cartão de crédito conta no mês da fatura em que é cobrado,
+  // igual ao app do banco. Pix, dinheiro e receitas seguem a data do calendário.
+  const byInvoice = periodType === 'month'
+  const currentKey = startStr.slice(0, 7)
+  const prevKey = prevStartStr.slice(0, 7)
+  // Dia de fechamento real por cartão: a "data de corte" impressa nas faturas importadas (compras a partir
+  // do corte vão para a fatura seguinte). Sem isso, o dia cadastrado no cartão.
+  const cutoffClosing = new Map<string, number>()
+  for (const t of txList as any[]) {
+    const cut = t.original_extracted_data?.statement_printed?.nextCutoff
+    if (cut && t.account_id && !cutoffClosing.has(t.account_id)) cutoffClosing.set(t.account_id, Math.max(1, Number(cut.slice(8, 10)) - 1))
+  }
+  const competenceOf = (tx: any): string | null => {
+    if (!byInvoice || !tx.account_id) return null
+    // Receitas só seguem a fatura quando são créditos lançados no cartão (estornos, ajustes).
+    if (tx.type === 'income' && !tx.original_extracted_data?.card_credit) return null
+    const acc = accountsMap[tx.account_id]
+    if (!acc || acc.type !== 'credit_card') return null
+    return cardCompetenceMonth(tx, cutoffClosing.get(tx.account_id) ?? (acc.closing_day || 5), acc.due_day || 15)
+  }
+  const clampToPeriod = (d: string) => (d < startStr ? startStr : d > endStr ? endStr : d)
+
   for (const tx of txList) {
-    const effDate = getEffectiveDate(tx)
+    const competence = competenceOf(tx)
+    const rawDate = getEffectiveDate(tx)
+    const inCurrent = competence ? competence === currentKey : rawDate >= startStr && rawDate <= endStr
+    const inPrevious = competence ? competence === prevKey : rawDate >= prevStartStr && rawDate <= prevEndStr
+    // Data usada nos gráficos por dia: a do lançamento, presa dentro do mês exibido.
+    const effDate = competence && inCurrent ? clampToPeriod(rawDate) : rawDate
     const amount = Number(tx.total) || 0
     const isIncome = tx.type === 'income'
     const cv = tx.canonical_vendors ? (Array.isArray(tx.canonical_vendors) ? tx.canonical_vendors[0] : tx.canonical_vendors) : null
@@ -579,7 +648,7 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
     const categoryName = catRel?.name || (tx.category ? translateCategory(tx.category) : 'Outros')
 
     // Check if in current period
-    if (effDate >= startStr && effDate <= endStr) {
+    if (inCurrent) {
       periodTransactions.push({
         ...tx,
         vendor: displayVendor,
@@ -660,7 +729,7 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
     }
 
     // Check if in previous period
-    if (effDate >= prevStartStr && effDate <= prevEndStr) {
+    if (inPrevious) {
       if (isIncome) {
         prevIncome += amount
       } else {
@@ -1114,12 +1183,45 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
     allUpcoming.reduce((sum, item) => sum + item.amount, 0).toFixed(2)
   )
 
+  const { computeMonthlyHistory, computeSubscriptions } = await import('./dashboardExtras')
+  const { getSetting } = await import('../userSettings')
+  const isCardFilter = Boolean(effectivePaymentMethod && /cr[eé]dito|cart[aã]o|card/i.test(effectivePaymentMethod))
+  const [monthlyHistory, subscriptions, budgetSetting] = byInvoice
+    ? await Promise.all([
+        computeMonthlyHistory(supabase, accountsMap, currentKey, {
+          userId: options.userId, accountId: effectiveAccountId, pix: isPixFilter, card: isCardFilter,
+        }).catch(() => []),
+        computeSubscriptions(supabase, currentKey, options.userId).catch(() => ({ items: [], monthlyTotal: 0 })),
+        options.userId ? getSetting<Record<string, number>>(options.userId, 'budgets') : Promise.resolve({ value: null, available: false }),
+      ])
+    : [[], { items: [], monthlyTotal: 0 }, { value: null, available: false }]
+
+  const cardInvoices = byInvoice
+    ? await computeCardInvoices(supabase, accountsMap, currentKey, options.userId, effectiveAccountId).catch((e) => {
+        console.warn('Could not compute card invoice status:', e)
+        return []
+      })
+    : []
+
   return {
+    cardInvoices,
+    monthlyHistory,
+    subscriptions,
+    budgets: { available: budgetSetting.available, values: budgetSetting.value || {} },
     period: {
       type: periodType,
       label: periodLabel,
       startDate: startStr,
       endDate: endStr,
+      cardInvoiceNote: byInvoice
+        ? Object.values(accountsMap)
+            .filter((a) => a.type === 'credit_card' && (!effectiveAccountId || a.id === effectiveAccountId))
+            .map((a) => {
+              const due = `${String(a.due_day || 15).padStart(2, '0')}/${addMonthsToDate(`${currentKey}-01`, 1).slice(5, 7)}`
+              return `${a.name}: fatura que vence ${due}`
+            })
+            .join(' · ') || null
+        : null,
       previousLabel: prevPeriodLabel,
       previousStartDate: prevStartStr,
       previousEndDate: prevEndStr,
@@ -1153,6 +1255,7 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
     topVendors,
     accountMetrics,
     recentTransactions: periodTransactions.slice(0, 5),
+    periodTransactions: periodTransactions.map(({ canonical_vendors, ...t }: any) => t),
     dailyExpenses,
     upcomingCommitments: {
       forecastTotal30Days,
@@ -1170,4 +1273,130 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
     allUpcoming,
     insights,
   }
+}
+
+
+/**
+ * Fatura de cada cartão para o mês de competência `monthKey`, igual ao banco:
+ *   a pagar = despesas − créditos − pagamentos desta fatura − crédito que sobrou da anterior.
+ * Fatura importada com resumo impresso usa os valores do banco; as demais são calculadas em cadeia.
+ */
+async function computeCardInvoices(
+  supabase: any,
+  accountsMap: Record<string, { id: string; name: string; type: string; closing_day?: number | null; due_day?: number | null }>,
+  monthKey: string,
+  userId?: string,
+  onlyAccountId?: string,
+): Promise<CardInvoiceStatus[]> {
+  const cards = Object.values(accountsMap).filter((a) => a.type === 'credit_card' && (!onlyAccountId || a.id === onlyAccountId))
+  if (!cards.length) return []
+  const months: string[] = []
+  for (let i = 5; i >= 0; i--) months.push(addMonthsToDate(`${monthKey}-01`, -i).slice(0, 7))
+  const future = [1, 2, 3].map((i) => addMonthsToDate(`${monthKey}-01`, i).slice(0, 7))
+  const from = addMonthsToDate(`${months[0]}-01`, -2)
+  const to = addMonthsToDate(`${monthKey}-01`, 5)
+  const out: CardInvoiceStatus[] = []
+  for (const card of cards) {
+    let q = supabase.from('transactions')
+      .select('type, total, date, created_at, installment_current, original_extracted_data')
+      .eq('account_id', card.id).gte('date', from).lte('date', to)
+    if (userId) q = q.eq('user_id', userId)
+    const { data: rows } = await q
+    const { data: invoices } = await supabase.from('credit_card_invoices')
+      .select('due_date, invoice_payments(amount)').eq('account_id', card.id)
+    const paidByDue = new Map<string, number>()
+    for (const inv of invoices || []) {
+      paidByDue.set(inv.due_date, (inv.invoice_payments || []).reduce((s: number, p: any) => s + Number(p.amount || 0), 0))
+    }
+    const closing = card.closing_day || 5
+    const dueDay = card.due_day || 15
+    // Corte real de cada fatura: a "data de corte" impressa na fatura anterior. Compras a partir do corte
+    // entram na fatura seguinte. Sem essa data, usa o dia de corte das outras faturas (ou o do cartão).
+    const knownCutoffs = new Map<string, string>()
+    for (const r of rows || []) {
+      const o = r.original_extracted_data
+      if (o?.statement_printed?.nextCutoff && o.statement_due_date) knownCutoffs.set(o.statement_due_date.slice(0, 7), o.statement_printed.nextCutoff)
+    }
+    const cutDay = knownCutoffs.size ? Number(Array.from(knownCutoffs.values())[0].slice(8, 10)) : Math.min(closing + 1, 28)
+    const realClosing = Math.max(1, cutDay - 1)
+    const cutoffFor = (m: string): string =>
+      knownCutoffs.get(m) || `${addMonthsToDate(`${m}-01`, 1).slice(0, 8)}${String(cutDay).padStart(2, '0')}`
+    const shiftDay = (iso: string, days: number) => {
+      const d = new Date(iso + 'T00:00:00Z')
+      d.setUTCDate(d.getUTCDate() + days)
+      return d.toISOString().slice(0, 10)
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    let carry = 0
+    let last: CardInvoiceStatus | null = null
+    for (const m of months) {
+      const cutoff = cutoffFor(m)
+      const cycleEnd = shiftDay(cutoff, -1)
+      const cycleStart = cutoffFor(addMonthsToDate(`${m}-01`, -1).slice(0, 7))
+      const closed = today >= cutoff
+      let expenses = 0
+      let credits = 0
+      let printed: { expenses?: number; advanced?: number; due?: number } | null = null
+      for (const r of rows || []) {
+        if (r.type === 'income' && !r.original_extracted_data?.card_credit) continue
+        if (cardCompetenceMonth(r, realClosing, dueDay) !== m) continue
+        if (r.type === 'income') credits += Number(r.total) || 0
+        else expenses += Number(r.total) || 0
+        const p = r.original_extracted_data?.statement_printed
+        if (p && r.original_extracted_data?.statement_due_date && !printed) {
+          if (addMonthsToDate(r.original_extracted_data.statement_due_date, -1).slice(0, 7) === m) printed = p
+        }
+      }
+      const dueDate = `${addMonthsToDate(`${m}-01`, 1).slice(0, 8)}${String(Math.min(dueDay, 28)).padStart(2, '0')}`
+      const payments = Array.from(paidByDue.entries())
+        .filter(([due]) => due.slice(0, 7) === dueDate.slice(0, 7))
+        .reduce((s, [, v]) => s + v, 0)
+      let toPay: number
+      let fromStatement = false
+      if (printed && printed.advanced != null && printed.expenses != null) {
+        toPay = printed.due ?? Math.max(0, printed.expenses - printed.advanced)
+        carry = Math.max(0, printed.advanced - printed.expenses)
+        fromStatement = true
+        last = { accountId: card.id, accountName: card.name, dueDate, expenses, credits, payments,
+          carriedCredit: Math.max(0, printed.advanced - credits - payments), toPay, fromStatement, cycleStart, cycleEnd, closed,
+          upcoming: [], missingStatements: [] }
+        continue
+      }
+      const carriedCredit = carry
+      const balance = expenses - credits - payments - carriedCredit
+      toPay = Math.max(0, balance)
+      carry = Math.max(0, -balance)
+      last = { accountId: card.id, accountName: card.name, dueDate, expenses, credits, payments, carriedCredit, toPay, fromStatement,
+        cycleStart, cycleEnd, closed, upcoming: [], missingStatements: [] }
+    }
+    if (last) {
+      // Próximas faturas: despesas já lançadas (parcelas) nos 3 meses seguintes.
+      last.upcoming = future.map((m) => {
+        let exp = 0
+        for (const r of rows || []) {
+          if (r.type === 'income') continue
+          if (cardCompetenceMonth(r, realClosing, dueDay) === m) exp += Number(r.total) || 0
+        }
+        return { dueDate: `${addMonthsToDate(`${m}-01`, 1).slice(0, 8)}${String(Math.min(dueDay, 28)).padStart(2, '0')}`, expenses: Math.round(exp * 100) / 100 }
+      })
+      // Faturas já fechadas, depois da primeira importada, que ainda não foram importadas.
+      const { data: dueRows } = await supabase.from('transactions').select('due:original_extracted_data->>statement_due_date')
+        .eq('account_id', card.id).not('original_extracted_data->>statement_due_date', 'is', null).limit(5000)
+      const imported = new Set(((dueRows || []) as any[]).map((d) => String(d.due).slice(0, 7)))
+      if (imported.size) {
+        const first = Array.from(imported).sort()[0]
+        const missing: string[] = []
+        for (let m = addMonthsToDate(`${first}-01`, -1).slice(0, 7); m < monthKey; m = addMonthsToDate(`${m}-01`, 1).slice(0, 7)) {
+          const due = addMonthsToDate(`${m}-01`, 1).slice(0, 7)
+          if (due <= first) continue
+          if (today >= cutoffFor(m) && !imported.has(due)) missing.push(`${due}-${String(Math.min(dueDay, 28)).padStart(2, '0')}`)
+        }
+        last.missingStatements = missing
+      }
+      const r2 = (n: number) => Math.round(n * 100) / 100
+      out.push({ ...last, expenses: r2(last.expenses), credits: r2(last.credits), payments: r2(last.payments),
+        carriedCredit: r2(last.carriedCredit), toPay: r2(last.toPay) })
+    }
+  }
+  return out
 }

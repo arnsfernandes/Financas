@@ -196,7 +196,11 @@ export default function Home() {
     isRecurring?: boolean
     recurrenceStatus?: 'active' | 'ended'
     isInstallment?: boolean
+    competence?: { key: string; label: string } | null
+    search?: string
   }) {
+    setFilterCompetence(filters.competence ?? null)
+    setInitialTxSearch(filters.search || '')
     if (filters.startDate !== undefined) setFilterStartDate(filters.startDate || '')
     if (filters.endDate !== undefined) setFilterEndDate(filters.endDate || '')
     if (filters.vendor !== undefined) setFilterVendor(filters.vendor || '')
@@ -215,6 +219,8 @@ export default function Home() {
       paymentMethod: filters.paymentMethod || undefined,
       isRecurring: filters.isRecurring,
       isInstallment: filters.isInstallment,
+      competence: filters.competence?.key ?? null,
+      search: filters.search || undefined,
     })
   }
 
@@ -257,6 +263,9 @@ export default function Home() {
   const [filterEndDate, setFilterEndDate] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterPaymentMethod, setFilterPaymentMethod] = useState('')
+  // Mês como na Visão Geral (cartão pela fatura): YYYY-MM, com o nome para exibir
+  const [filterCompetence, setFilterCompetence] = useState<{ key: string; label: string } | null>(null)
+  const [initialTxSearch, setInitialTxSearch] = useState('')
 
   // Carregar transações
   const fetchTransactions = useCallback(async (
@@ -273,6 +282,7 @@ export default function Home() {
       vendor?: string
       category?: string
       search?: string
+      competence?: string | null
     },
     isLoadMore = false
   ) => {
@@ -314,8 +324,12 @@ export default function Home() {
       } else if (rFilter === 'installment') {
         params.append('isInstallment', 'true')
       }
-      if (sDate) params.append('startDate', sDate)
-      if (eDate) params.append('endDate', eDate)
+      const comp = customFilters?.competence !== undefined ? customFilters.competence : filterCompetence?.key
+      if (comp) params.append('competence', comp)
+      else {
+        if (sDate) params.append('startDate', sDate)
+        if (eDate) params.append('endDate', eDate)
+      }
       if (vName) params.append('vendor', vName)
       if (cName) params.append('category', cName)
       params.append('_t', String(Date.now()))
@@ -349,7 +363,7 @@ export default function Home() {
         setLoadingTx(false)
       }
     }
-  }, [fetchWithAuth, filterType, filterAccount, filterRecurring, filterStartDate, filterEndDate, filterVendor, filterCategory, filterPaymentMethod, transactions.length])
+  }, [fetchWithAuth, filterType, filterAccount, filterRecurring, filterStartDate, filterEndDate, filterVendor, filterCategory, filterPaymentMethod, filterCompetence, transactions.length])
 
   async function loadMoreTransactions() {
     if (loadingMoreTx || !hasMoreTx) return
@@ -571,6 +585,13 @@ export default function Home() {
             filterPaymentMethod={filterPaymentMethod}
             setFilterPaymentMethod={setFilterPaymentMethod}
             fetchTransactions={fetchTransactions}
+            key={`tx-${initialTxSearch}`}
+            initialSearch={initialTxSearch}
+            competenceLabel={filterCompetence?.label ?? null}
+            onClearCompetence={() => {
+              setFilterCompetence(null)
+              fetchTransactions({ competence: null })
+            }}
             onDeleteTransaction={async (id) => {
               await handleDeleteTransaction(id)
             }}

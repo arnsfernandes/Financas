@@ -111,13 +111,24 @@ export function TransactionsTab({
   onDeleteInstallmentGroup,
   onTransactionUpdated,
   className,
-}: TransactionsTabProps) {
+  initialSearch = '',
+  competenceLabel = null,
+  onClearCompetence,
+}: TransactionsTabProps & {
+  initialSearch?: string
+  competenceLabel?: string | null
+  onClearCompetence?: () => void
+}) {
   const { fetchWithAuth } = useTelegramWebApp()
 
   // Filtros e busca textual
-  const [txSearchText, setTxSearchText] = useState('')
+  const [txSearchText, setTxSearchText] = useState(initialSearch)
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
   const isInitialMount = React.useRef(true)
+  // Última versão de fetchTransactions: a busca só refaz a consulta quando o texto muda (e não a cada
+  // atualização da lista, que trocava a função e disparava consultas repetidas).
+  const fetchRef = React.useRef(fetchTransactions)
+  fetchRef.current = fetchTransactions
 
   useEffect(() => {
     if (isInitialMount.current) {
@@ -128,7 +139,7 @@ export function TransactionsTab({
       clearTimeout(searchTimeoutRef.current)
     }
     searchTimeoutRef.current = setTimeout(() => {
-      fetchTransactions({ search: txSearchText.trim() || undefined })
+      fetchRef.current({ search: txSearchText.trim() || undefined })
     }, 350)
 
     return () => {
@@ -136,7 +147,7 @@ export function TransactionsTab({
         clearTimeout(searchTimeoutRef.current)
       }
     }
-  }, [txSearchText, fetchTransactions])
+  }, [txSearchText])
 
   // Lista de categorias para o filtro
   const [categoriesList, setCategoriesList] = useState<{ id: string; name: string }[]>([])
@@ -467,6 +478,13 @@ export function TransactionsTab({
       </div>
 
       {/* 2. BARRA DE FERRAMENTAS E FILTROS */}
+      {competenceLabel && (
+        <div className="flex items-center gap-2 text-xs bg-[#EBF2FF] text-[#2F68FE] rounded-xl px-3 py-2">
+          <span className="font-medium">{competenceLabel}</span>
+          <span className="text-[#2F68FE]/70">cartão pela fatura, Pix e dinheiro pela data</span>
+          <button type="button" onClick={onClearCompetence} className="ml-auto font-semibold hover:underline">Limpar</button>
+        </div>
+      )}
       <TransactionsFilterBar
         txSearchText={txSearchText}
         setTxSearchText={setTxSearchText}
