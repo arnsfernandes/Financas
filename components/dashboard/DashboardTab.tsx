@@ -19,7 +19,6 @@ import {
   ArrowUpRight,
   Info,
   Search,
-  Bell,
   Repeat,
   Wallet,
 } from 'lucide-react'
@@ -407,23 +406,6 @@ export function DashboardTab({
         </div>
       ) : (
         <>
-          {cardInvoice?.missingStatements?.length > 0 && (
-            <div className="flex items-center gap-3 bg-[#EBF2FF] text-[#2F68FE] rounded-2xl px-4 py-3 text-sm">
-              <Bell className="w-4 h-4 shrink-0" />
-              <span className="flex-1">
-                {cardInvoice.missingStatements.length === 1
-                  ? `A fatura que venceu em ${shortDate(cardInvoice.missingStatements[0])} ainda não foi importada.`
-                  : `${cardInvoice.missingStatements.length} faturas ainda não foram importadas (${cardInvoice.missingStatements.map((d: string) => shortDate(d)).join(', ')}).`}{' '}
-                <span className="text-[#2F68FE]/70">Leva 1 minuto.</span>
-              </span>
-              {onOpenNewLaunch && (
-                <button type="button" onClick={() => onOpenNewLaunch('expense')} className="font-semibold whitespace-nowrap hover:underline">
-                  Importar fatura →
-                </button>
-              )}
-            </div>
-          )}
-
           {/* 2. CARDS EM GRADE (estilo apps da Apple): cada card mostra o essencial; tocar abre os detalhes. */}
           {(() => {
             const expenses = dashboardData.metrics?.totalExpenses ?? dashboardData.metrics?.totalSpent ?? 0
