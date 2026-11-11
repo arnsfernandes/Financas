@@ -112,7 +112,7 @@ describe('Shortcuts & Siri iPhone Integration Suite', () => {
       expect(res.status).toBe(400)
       const data = await res.json()
       expect(data.ok).toBe(false)
-      expect(data.error).toContain('Nenhum texto informado')
+      expect(data.error).toContain('Nada foi escrito')
     })
 
     it('rejects multiple expenses in voice input with status 422', async () => {
@@ -129,7 +129,7 @@ describe('Shortcuts & Siri iPhone Integration Suite', () => {
       expect(res.status).toBe(422)
       const data = await res.json()
       expect(data.ok).toBe(false)
-      expect(data.error).toContain('múltiplos lançamentos')
+      expect(data.error).toContain('mais de um lançamento')
     })
 
     it('processes single expense successfully and returns voice summary for Siri', async () => {
@@ -160,7 +160,7 @@ describe('Shortcuts & Siri iPhone Integration Suite', () => {
       const data = await res.json()
 
       expect(data.ok).toBe(true)
-      expect(data.message).toContain('Despesa de')
+      expect(data.message).toContain('✓ Gasolina · R$')
       expect(data.message).toContain('Gasolina')
       expect(data.message).toContain('Inter')
       expect(data.transaction).toBeDefined()

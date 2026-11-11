@@ -178,7 +178,14 @@ describe('Deterministic /gastos Inline Navigation Flow (lib/gastosNavigation.ts)
   })
 
   it('renders Cards screen (gastos_cards) with compact card invoice details and transaction buttons', async () => {
-    const screen = await renderGastosCardsScreen({ m: '0' }, {})
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-20T12:00:00Z'))
+    let screen
+    try {
+      screen = await renderGastosCardsScreen({ m: '0' }, {})
+    } finally {
+      vi.useRealTimers()
+    }
     expect(screen.text).toContain('Gastos por Cartão de Crédito')
     expect(screen.text).toContain('Cartão Inter')
     expect(screen.text).toContain(`${formatBRL(800)} • 6 lançamentos`)
