@@ -43,6 +43,7 @@ interface PreviewLine {
   refundedBy?: number
   paymentDue?: string | null
   paymentRegistered?: boolean
+  probable?: { id: string; vendor: string | null; date: string | null; total: number; accountName: string | null; category: string | null }
 }
 
 interface PreviewResponse {
@@ -120,6 +121,8 @@ export function StatementImportPanel({
   const [accountId, setAccountId] = useState('')
   const [excluded, setExcluded] = useState<Set<number>>(new Set())
   const [overrides, setOverrides] = useState<Record<number, string>>({})
+  // "Talvez já lançado": 'same' junta com o lançamento manual, 'different' registra como compra nova.
+  const [decisions, setDecisions] = useState<Record<number, 'same' | 'different'>>({})
   const [openCategory, setOpenCategory] = useState<string | null>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [useAi, setUseAi] = useState(false)
@@ -209,7 +212,10 @@ export function StatementImportPanel({
       .sort((a, b) => b.total - a.total)
 
     const importable = lines.filter((l) => l.action === 'import')
-    const chosen = importable.filter((l) => !excluded.has(l.index))
+    const probables = importable.filter((l) => l.probable)
+    const undecided = probables.filter((l) => !decisions[l.index] && !excluded.has(l.index)).length
+    const merges = probables.filter((l) => decisions[l.index] === 'same')
+    const chosen = importable.filter((l) => !excluded.has(l.index) && decisions[l.index] !== 'same')
     const chosenTotal = chosen.reduce((s, l) => s + (monthOf.get(l.index) || 0), 0)
     const newCredits = lines.filter((l) => l.action === 'card_credit')
     const pendingPayments = payments.filter((l) => !l.paymentRegistered && l.paymentDue)
@@ -251,17 +257,18 @@ export function StatementImportPanel({
 
     return {
       lines, charged, refunds, advances, toPay, payments, categories, monthOf, real: charged,
-      importable, chosen, chosenTotal, newCredits, markers: [] as PreviewLine[], fixes: [] as PreviewLine[],
+      importable, chosen, chosenTotal, newCredits, probables, undecided, merges, markers: [] as PreviewLine[], fixes: [] as PreviewLine[],
       pendingPayments, check, printed, adjustments: 0, adjustmentDebits: 0, canceled: 0,
       refundGroups: Array.from(refundGroups.values()),
       cards: Array.from(byCard.entries()).sort((a, b) => b[1] - a[1]),
       skipped: [] as PreviewLine[],
     }
-  }, [preview, overrides, excluded])
-  const hasWork = view.chosen.length > 0 || view.newCredits.length > 0 || view.pendingPayments.length > 0
+  }, [preview, overrides, excluded, decisions])
+  const hasWork =
+    view.chosen.length > 0 || view.merges.length > 0 || view.newCredits.length > 0 || view.pendingPayments.length > 0
 
   async function confirm() {
-    if (!accountId || !hasWork || saving) return
+    if (!accountId || !hasWork || saving || view.undecided > 0) return
     setSaving(true)
     setError('')
     try {
@@ -271,6 +278,7 @@ export function StatementImportPanel({
       form.append('accountId', accountId)
       form.append('selected', JSON.stringify(view.chosen.map((l) => l.index)))
       form.append('categories', JSON.stringify(overrides))
+      form.append('merges', JSON.stringify(Object.fromEntries(view.merges.map((l) => [l.index, l.probable!.id]))))
       if (password) form.append('password', password)
       if (preview?.parsed) form.append('statement', JSON.stringify(preview.parsed))
       const res = await fetchWithAuth('/api/statements/import', { method: 'POST', body: form })
@@ -279,6 +287,7 @@ export function StatementImportPanel({
       const extra = [
         data.creditsRegistered ? `${data.creditsRegistered} crédito(s) · ${formatBRL(data.creditsAmount)}` : '',
         data.paymentsRegistered ? `${data.paymentsRegistered} pagamento(s) de fatura` : '',
+        data.merged ? `${data.merged} juntada(s) com o que você já tinha lançado` : '',
       ].filter(Boolean)
       await onImported?.(
         `${data.imported} despesa(s) registrada(s) · ${formatBRL(data.importedAmount)}` +
@@ -294,6 +303,8 @@ export function StatementImportPanel({
   const st = preview?.statement
   const statusOf = (l: PreviewLine): [string, string] | null =>
     l.action === 'duplicate' || l.action === 'installment_exists' ? ['já lançada', 'text-[#667085] bg-[#F2F4F7]']
+    : l.probable && decisions[l.index] === 'same' ? ['junta com a sua', 'text-[#667085] bg-[#F2F4F7]']
+    : l.probable && !decisions[l.index] ? ['talvez repetida', 'text-amber-800 bg-amber-50']
     : l.refundedBy ? [`estornada · crédito ${formatBRL(l.refundedBy)}`, 'text-emerald-700 bg-emerald-50']
     : null
 
@@ -434,6 +445,63 @@ export function StatementImportPanel({
                   ? ` · crédito da fatura anterior: ${formatBRL(view.printed.advanced - view.refunds - view.advances)}`
                   : ''}
               </p>
+            )}
+
+            {/* Talvez já lançado */}
+            {view.probables.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 space-y-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-[#0F172A]">
+                      {view.probables.length === 1 ? 'Talvez você já tenha lançado esta compra' : `Talvez você já tenha lançado ${view.probables.length} compras`}
+                    </p>
+                    <p className="text-[11px] text-[#667085] mt-0.5">
+                      Mesmo valor e data próxima de um lançamento seu. Se for a mesma compra, o app junta os dois e mantém a sua categoria.
+                    </p>
+                  </div>
+                </div>
+                <ul className="space-y-2">
+                  {view.probables.map((l) => {
+                    const p = l.probable!
+                    const d = decisions[l.index]
+                    const choose = (v: 'same' | 'different') =>
+                      setDecisions((prev) => ({ ...prev, [l.index]: v }))
+                    return (
+                      <li key={l.index} className="bg-white rounded-xl border border-[#EBEEF2] p-2.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-xs font-semibold text-[#0F172A] truncate" title={l.description}>{l.vendor}</span>
+                          <span className="text-xs font-semibold tabular-nums text-[#0F172A] whitespace-nowrap">
+                            {formatBRL(l.netAmount ?? l.amount)} · {short(l.date)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#667085] mt-0.5">
+                          Parece “{p.vendor || 'sem nome'}” que você lançou em {p.date ? short(p.date) : '—'}
+                          {p.accountName ? ` (${p.accountName})` : ''}{p.category ? ` · ${p.category}` : ''}.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => choose('same')}
+                            aria-pressed={d === 'same'}
+                            className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold border ${d === 'same' ? 'bg-[#2F68FE] border-[#2F68FE] text-white' : 'border-[#D0D5DD] text-[#344054]'}`}
+                          >
+                            É a mesma
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => choose('different')}
+                            aria-pressed={d === 'different'}
+                            className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold border ${d === 'different' ? 'bg-[#0F172A] border-[#0F172A] text-white' : 'border-[#D0D5DD] text-[#344054]'}`}
+                          >
+                            São diferentes
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
             )}
 
             {/* Categorias */}
@@ -687,19 +755,24 @@ export function StatementImportPanel({
             <button
               type="button"
               onClick={confirm}
-              disabled={!hasWork || !accountId || saving}
+              disabled={!hasWork || !accountId || saving || view.undecided > 0}
               className="w-full inline-flex items-center justify-center gap-2 bg-[#2F68FE] hover:bg-[#2557D6] disabled:opacity-50 text-white text-sm font-semibold rounded-xl px-4 py-3"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              {!hasWork
+              {view.undecided > 0
+                ? `Responda ${view.undecided === 1 ? 'a compra repetida' : `as ${view.undecided} compras repetidas`} acima`
+                : !hasWork
                 ? 'Tudo desta fatura já está registrado'
                 : view.chosen.length > 0
                   ? `Registrar ${view.chosen.length} despesa${view.chosen.length > 1 ? 's' : ''} · ${formatBRL(view.chosenTotal)}`
-                  : 'Registrar créditos e pagamentos'}
+                  : view.merges.length > 0
+                    ? `Juntar ${view.merges.length} compra${view.merges.length > 1 ? 's' : ''} com as suas`
+                    : 'Registrar créditos e pagamentos'}
             </button>
             {hasWork && (
               <p className="text-[11px] text-center text-[#98A2B3]">
                 {[
+                  view.merges.length && view.chosen.length ? `${view.merges.length} juntada(s) com as suas` : '',
                   view.newCredits.length ? `+ ${view.newCredits.length} crédito(s) · ${formatBRL(view.newCredits.reduce((s, l) => s + l.amount, 0))}` : '',
                   view.pendingPayments.length ? `+ ${view.pendingPayments.length} pagamento(s) de fatura` : '',
                   !accountId ? 'escolha o cartão no topo' : '',

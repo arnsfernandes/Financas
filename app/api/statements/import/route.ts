@@ -16,6 +16,8 @@ const MAX_BYTES = 25 * 1024 * 1024
  *  - accountId: cartão de crédito de destino (na prévia, opcional: sugere o cartão do mesmo banco)
  *  - ai: '1' para ler com IA (reserva)
  *  - selected: na confirmação, JSON com os índices das linhas a importar
+ *  - merges: na confirmação, JSON { índice da linha: id do lançamento manual } das compras que o
+ *    usuário confirmou já ter lançado (o lançamento existente recebe os dados da fatura)
  *
  * Na confirmação, além das compras selecionadas: compras estornadas por inteiro são registradas com
  * R$ 0,00, estornos de compras já lançadas corrigem o valor delas, e parcelas antecipadas ficam com a
@@ -93,6 +95,13 @@ export async function POST(req: NextRequest) {
         : { singles: [], installments: [], markers: [], payments: [], credits: [] }
     // Modo igual ao banco: despesas como cobradas, estornos/ajustes como crédito no cartão.
     const lines = planLiteralImport(statement, existing)
+    // "Talvez já lançado": mesmo valor, até 3 dias de diferença, outro nome ou outra conta.
+    if (supabase && account) {
+      const { loadProbableCandidates, markProbableMatches } = await import('@/lib/statements/probableMatches')
+      const allAccounts = await listAccounts({ activeOnly: false, userId }).catch(() => [])
+      const names = new Map(allAccounts.map((a) => [a.id, a.name] as [string, string]))
+      markProbableMatches(lines, await loadProbableCandidates(supabase, statement, userId), names)
+    }
 
     // Categoria: preferência aprendida do usuário para o estabelecimento, senão a sugestão por palavras-chave.
     const categories = await listCategories({ type: 'expense', activeOnly: true, userId })
@@ -181,6 +190,33 @@ export async function POST(req: NextRequest) {
     }
 
     if (!supabase) return NextResponse.json({ ok: false, error: 'Banco de dados indisponível.' }, { status: 500 })
+
+    // Compras que o usuário disse serem as mesmas de um lançamento manual: atualiza o lançamento
+    // existente com os dados da fatura em vez de criar outro.
+    let merged = 0
+    if (form.get('merges')) {
+      let merges: Record<string, string>
+      try {
+        merges = JSON.parse(String(form.get('merges')))
+      } catch {
+        return NextResponse.json({ ok: false, error: 'Lançamentos repetidos inválidos.' }, { status: 400 })
+      }
+      const { mergePatch } = await import('@/lib/statements/probableMatches')
+      for (const line of lines) {
+        const txId = merges[String(line.index)]
+        if (!txId || line.probable?.id !== txId) continue
+        selected.delete(line.index)
+        const { data: tx, error: readErr } = await supabase
+          .from('transactions').select('vendor, date, notes, original_extracted_data')
+          .eq('id', txId).eq('user_id', userId).maybeSingle()
+        if (readErr || !tx) continue
+        const { error: upErr } = await supabase.from('transactions')
+          .update(mergePatch(line, tx, { accountId: account!.id, statement }))
+          .eq('id', txId).eq('user_id', userId)
+        if (upErr) throw new Error(`Falha ao juntar com o lançamento existente: ${upErr.message}`)
+        merged++
+      }
+    }
     const incomeCategories = await listCategories({ type: 'income', activeOnly: true, userId }).catch(() => [])
     const creditCategory = incomeCategories.find((c) => /reembols|estorno/i.test(c.name)) || null
     const { commitStatementImport } = await import('@/lib/statements/commitImport')
@@ -188,7 +224,7 @@ export async function POST(req: NextRequest) {
       supabase, lines, statement, userId, accountId: account!.id, filename: file.name, selected, categoryIdOf,
       creditCategoryId: creditCategory?.id ?? null,
     })
-    return NextResponse.json({ ok: true, statement: summary, ...result })
+    return NextResponse.json({ ok: true, statement: summary, ...result, merged })
   } catch (e) {
     console.error('Statement import error:', e)
     return NextResponse.json(

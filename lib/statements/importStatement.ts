@@ -71,6 +71,10 @@ export interface PreviewLine extends StatementLine {
   /** pagamento: vencimento da fatura que ele quita, e se já está registrado */
   paymentDue?: string | null
   paymentRegistered?: boolean
+  /** quando action = duplicate: id do lançamento que já existe */
+  duplicateOf?: string
+  /** compra nova que talvez já tenha sido lançada à mão (o usuário decide na prévia) */
+  probable?: import('./probableMatches').ProbableMatch
 }
 
 export interface ExistingTx {
@@ -342,7 +346,7 @@ export function planStatementImport(
     if (dup) {
       usedKnown.add(dup.id)
       knownOfLine.set(out.length, dup)
-      out.push({ ...base, action: 'duplicate', reason: dup.kind === 'marker'
+      out.push({ ...base, action: 'duplicate', duplicateOf: dup.id, reason: dup.kind === 'marker'
         ? 'Compra estornada, já registrada'
         : `Já lançado em ${dup.firstDate} (${dup.rows[0].vendor || 'sem nome'})` })
     } else {
