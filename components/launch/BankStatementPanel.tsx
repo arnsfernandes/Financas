@@ -333,7 +333,7 @@ export function BankStatementPanel({
                     <label className="flex items-start gap-2 pt-1">
                       <input type="checkbox" checked={registerPayments} onChange={(e) => setRegisterPayments(e.target.checked)} className="mt-0.5 accent-[#2F68FE]" />
                       <span>
-                        Registrar os pagamentos de fatura que ainda não estão no app ({view.pendingPayments.length}): eles abatem o "A pagar" da fatura, sem contar como gasto.
+                        Registrar os pagamentos de fatura que ainda não estão no app ({view.pendingPayments.length}): eles abatem o “A pagar” da fatura, sem contar como gasto.
                       </span>
                     </label>
                   )}

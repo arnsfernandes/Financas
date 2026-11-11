@@ -105,7 +105,7 @@ export function CategoryReviewModal({ open, onClose, onChanged }: { open: boolea
             </label>
             <button type="button" onClick={() => setOnlyOthers((v) => !v)}
               className={`text-xs font-medium rounded-xl px-3 py-2 border ${onlyOthers ? 'bg-amber-50 border-amber-200 text-amber-800' : 'border-slate-200 text-slate-600'}`}>
-              Só "Outros" ({others})
+              Só “Outros” ({others})
             </button>
           </div>
         </div>
