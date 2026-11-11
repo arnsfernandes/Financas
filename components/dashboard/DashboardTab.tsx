@@ -444,7 +444,12 @@ export function DashboardTab({
                     </span>
                   )}
                   {history.length > 1 && (
-                    <MonthBars history={history} budget={totalBudget} current={history[history.length - 1]?.month} />
+                    <MonthBars
+                      history={history}
+                      budget={totalBudget}
+                      current={history[history.length - 1]?.month}
+                      onSelect={(index) => handleMonthNavigate(index - (history.length - 1))}
+                    />
                   )}
                   <div className="mt-auto pt-4">
                     <div className="border-t border-slate-100 pt-3 space-y-1.5 text-sm">
@@ -930,30 +935,85 @@ function InvoiceRow({ label, value }: { label: string; value: number }) {
 }
 
 
-/** Barras dos últimos meses com a linha do orçamento mensal (soma dos orçamentos das categorias). */
-function MonthBars({ history, budget, current }: { history: Array<{ month: string; label: string; total: number }>; budget: number; current?: string }) {
+/**
+ * Barras dos últimos meses com a linha do orçamento mensal (soma dos orçamentos das categorias).
+ * Passar o mouse (ou focar com o teclado / tocar) mostra a bolha com o valor; clicar abre o mês.
+ */
+function MonthBars({
+  history,
+  budget,
+  current,
+  onSelect,
+}: {
+  history: Array<{ month: string; label: string; total: number }>
+  budget: number
+  current?: string
+  onSelect?: (index: number) => void
+}) {
+  const [active, setActive] = useState<number | null>(null)
   const max = Math.max(1, budget, ...history.map((h) => h.total))
+  const monthName = (key: string) => {
+    const t = new Date(`${key}-01T00:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    return t.charAt(0).toUpperCase() + t.slice(1)
+  }
   return (
     <div className="mt-4" aria-label="Gastos dos últimos meses">
-      <div className="relative flex items-end gap-2 h-24">
+      <div className="relative flex items-end gap-2 h-24" onMouseLeave={() => setActive(null)}>
         {budget > 0 && (
-          <div className="absolute left-0 right-0 border-t border-dashed border-slate-300" style={{ bottom: `${(budget / max) * 100}%` }}>
+          <div className="absolute left-0 right-0 border-t border-dashed border-slate-300 pointer-events-none" style={{ bottom: `${(budget / max) * 100}%` }}>
             <span className="absolute right-0 -top-4 text-[10px] text-slate-400">orçamento {formatBRL(budget)}</span>
           </div>
         )}
-        {history.map((h) => {
+        {history.map((h, i) => {
           const over = budget > 0 && h.total > budget
           const isCurrent = h.month === current
+          const prev = i > 0 ? history[i - 1].total : null
+          const diff = prev && prev > 0 ? ((h.total - prev) / prev) * 100 : null
+          const isActive = active === i
           return (
-            <div key={h.month} className="flex-1 flex flex-col items-center justify-end h-full" title={`${h.label}: ${formatBRL(h.total)}`}>
-              <div
-                className="w-full rounded-t-md"
+            <button
+              key={h.month}
+              type="button"
+              onMouseEnter={() => setActive(i)}
+              onFocus={() => setActive(i)}
+              onBlur={() => setActive(null)}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (!isCurrent) onSelect?.(i)
+              }}
+              aria-label={`${monthName(h.month)}: ${formatBRL(h.total)}${isCurrent ? '' : '. Clique para abrir o mês'}`}
+              className={`relative flex-1 flex flex-col items-center justify-end h-full focus:outline-none ${isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
+            >
+              {isActive && (
+                <span
+                  role="tooltip"
+                  className={`absolute bottom-full mb-2 z-10 whitespace-nowrap rounded-xl bg-slate-900 text-white px-2.5 py-1.5 text-[11px] shadow-lg pointer-events-none ${
+                    i === 0 ? 'left-0' : i === history.length - 1 ? 'right-0' : 'left-1/2 -translate-x-1/2'
+                  }`}
+                >
+                  <span className="block font-semibold">{monthName(h.month)}</span>
+                  <span className="block tabular-nums text-sm font-bold">{formatBRL(h.total)}</span>
+                  {diff !== null && (
+                    <span className={`block ${diff > 0 ? 'text-rose-300' : 'text-emerald-300'}`}>
+                      {diff > 0 ? '+' : ''}{Math.round(diff)}% vs mês anterior
+                    </span>
+                  )}
+                  {budget > 0 && (
+                    <span className={`block ${over ? 'text-rose-300' : 'text-slate-300'}`}>
+                      {over ? `${formatBRL(h.total - budget)} acima do orçamento` : `${Math.round((h.total / budget) * 100)}% do orçamento`}
+                    </span>
+                  )}
+                  {!isCurrent && <span className="block text-slate-400 mt-0.5">Clique para abrir</span>}
+                </span>
+              )}
+              <span
+                className={`block w-full rounded-t-md transition-opacity ${active !== null && !isActive ? 'opacity-50' : ''}`}
                 style={{
                   height: `${Math.max(2, (h.total / max) * 100)}%`,
-                  backgroundColor: over ? '#F09595' : isCurrent ? '#2F68FE' : '#B5D4F4',
+                  backgroundColor: over ? '#F09595' : isCurrent ? '#2F68FE' : isActive ? '#85B7EB' : '#B5D4F4',
                 }}
               />
-            </div>
+            </button>
           )
         })}
       </div>
