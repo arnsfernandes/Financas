@@ -476,6 +476,7 @@ export default function Home() {
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         activeTabTitle={TAB_TITLES[activeTab]}
+        onOpenShortcuts={() => setShortcutsModalOpen(true)}
       />
 
       {/* Desktop & Mobile Sidebar */}
