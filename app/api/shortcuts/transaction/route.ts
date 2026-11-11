@@ -10,6 +10,7 @@ import { parseTextExpense } from '@/lib/pipeline'
 import { save } from '@/lib/persist'
 import { formatBRL } from '@/lib/formatters'
 import type { Receipt } from '@/lib/schema'
+import { shortcutSuccessMessage, shortcutErrorMessage } from '@/lib/shortcutMessage'
 
 /**
  * O atalho do iPhone mostra sempre o campo `message`: em caso de erro, ele recebe o motivo
@@ -18,7 +19,7 @@ import type { Receipt } from '@/lib/schema'
 export async function POST(req: NextRequest) {
   const res = await handleShortcutTransaction(req)
   const body = await res.json().catch(() => null)
-  if (body && body.ok === false && !body.message && body.error) body.message = `⚠️ ${body.error}`
+  if (body && body.ok === false && body.error) body.message = shortcutErrorMessage(body.message || body.error)
   return NextResponse.json(body, { status: res.status })
 }
 
@@ -56,7 +57,7 @@ async function handleShortcutTransaction(req: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        error: 'Nenhum texto informado. Diga ou envie o lançamento. Exemplo: "Gastei 45 de gasolina no Inter".',
+        error: 'Nada foi escrito.',
       },
       { status: 400 }
     )
@@ -71,7 +72,7 @@ async function handleShortcutTransaction(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Identifiquei múltiplos lançamentos na mesma frase. Para garantir a precisão por voz, registre um lançamento por vez.',
+          error: 'Tem mais de um lançamento na frase. Lance um por vez.',
         },
         { status: 422 }
       )
@@ -90,7 +91,7 @@ async function handleShortcutTransaction(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Não consegui identificar o valor financeiro da operação. Por favor, inclua o valor na frase (ex: "Gastei 50 no mercado").',
+          error: 'Faltou o valor.',
         },
         { status: 422 }
       )
@@ -105,7 +106,7 @@ async function handleShortcutTransaction(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Não foi possível identificar um valor financeiro válido no texto informado.',
+          error: 'Não encontrei um valor válido.',
         },
         { status: 422 }
       )
@@ -180,18 +181,27 @@ async function handleShortcutTransaction(req: NextRequest) {
       allowDuplicate: false,
     })
 
-    // 8. Buscar nome da conta/cartão associado para a resposta falada da Siri
+    // 8. Mensagem da notificação: o que foi lançado, onde, e quanto já foi gasto no mês.
     const matchedAccount = accounts.find((a) => a.id === saved.account_id)
-    const accountName = matchedAccount?.name || saved.payment_method || 'Conta'
+    const accountName = matchedAccount?.name || saved.payment_method || null
     const formattedAmount = formatBRL(Number(saved.total))
-    const isIncome = saved.type === 'income'
-    const typeLabel = isIncome ? 'Receita' : 'Despesa'
-    const vendorLabel = saved.vendor || (isIncome ? 'Receita' : 'Gasto')
-
-    // Mensagem curta e natural pronta para o leitor de voz da Siri / Atalhos do iOS
-    const summaryVoiceMessage = isIncome
-      ? `${typeLabel} de ${formattedAmount} em ${vendorLabel} registrada na conta ${accountName}.`
-      : `${typeLabel} de ${formattedAmount} em ${vendorLabel} registrada no ${accountName}.`
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' })
+    let monthTotal: { month: string; total: number } | null = null
+    if (saved.type !== 'income') {
+      try {
+        const { getSupabaseClient } = await import('@/lib/persist')
+        const { computeMonthlyHistory } = await import('@/lib/queries/dashboardExtras')
+        const supabase = getSupabaseClient()
+        if (supabase) {
+          const accountsMap = Object.fromEntries(accounts.map((a) => [a.id, a])) as any
+          const [m] = await computeMonthlyHistory(supabase, accountsMap, today.slice(0, 7), { userId: auth.user.id, months: 1 })
+          if (m) monthTotal = { month: m.month, total: m.total }
+        }
+      } catch {
+        monthTotal = null
+      }
+    }
+    const summaryVoiceMessage = shortcutSuccessMessage(saved as any, { accountName, today, monthTotal })
 
     return NextResponse.json({
       ok: true,
@@ -209,7 +219,7 @@ async function handleShortcutTransaction(req: NextRequest) {
         category: saved.category,
         paymentMethod: saved.payment_method,
         accountId: saved.account_id,
-        accountName,
+        accountName: accountName || 'Conta',
         date: saved.date,
         installments: saved.installment_total
           ? `${saved.installment_current || 1}/${saved.installment_total}`
