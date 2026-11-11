@@ -5,6 +5,7 @@ import type { Account } from '@/lib/schema'
 import type { DashboardSummary } from '@/lib/queries'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileHeader } from '@/components/layout/MobileHeader'
+import { PullToRefresh } from '@/components/layout/PullToRefresh'
 import { TelegramMiniAppNav } from '@/components/layout/TelegramMiniAppNav'
 import { useTelegramWebApp } from '@/lib/useTelegramWebApp'
 import { WebLoginScreen } from '@/components/auth/WebLoginScreen'
@@ -458,6 +459,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#F4F6F9] text-[#0F172A] flex flex-col md:flex-row font-sans selection:bg-[#3B82F6]/20 selection:text-[#0F172A]">
+      <PullToRefresh onRefresh={handleSaveSuccess} />
       {/* Mobile Top Header */}
       <MobileHeader
         setActiveTab={(tab) => {
