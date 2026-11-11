@@ -11,7 +11,18 @@ import { save } from '@/lib/persist'
 import { formatBRL } from '@/lib/formatters'
 import type { Receipt } from '@/lib/schema'
 
+/**
+ * O atalho do iPhone mostra sempre o campo `message`: em caso de erro, ele recebe o motivo
+ * (ex.: "inclua o valor na frase"), para a notificação nunca vir vazia.
+ */
 export async function POST(req: NextRequest) {
+  const res = await handleShortcutTransaction(req)
+  const body = await res.json().catch(() => null)
+  if (body && body.ok === false && !body.message && body.error) body.message = `⚠️ ${body.error}`
+  return NextResponse.json(body, { status: res.status })
+}
+
+async function handleShortcutTransaction(req: NextRequest) {
   // 1. Validar autenticação do usuário via Bearer Token de Atalhos
   const auth = await verifyShortcutsAuth(req)
   if (!auth.authorized || !auth.user) {
