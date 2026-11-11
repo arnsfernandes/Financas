@@ -159,6 +159,7 @@ export function DashboardTab({
   const history = ((dashboardData as any)?.monthlyHistory || []) as Array<{ month: string; label: string; total: number }>
   const subscriptions = ((dashboardData as any)?.subscriptions || { items: [], monthlyTotal: 0 }) as { items: any[]; monthlyTotal: number }
   const totalBudget = budgets?.values ? Object.values(budgets.values).reduce((s, v) => s + v, 0) : 0
+  const selectedMonthKey = dashboardData?.period?.startDate?.slice(0, 7)
 
   async function saveBudgets(values: Record<string, number>): Promise<string | null> {
     try {
@@ -447,8 +448,11 @@ export function DashboardTab({
                     <MonthBars
                       history={history}
                       budget={totalBudget}
-                      current={history[history.length - 1]?.month}
-                      onSelect={(index) => handleMonthNavigate(index - (history.length - 1))}
+                      current={selectedMonthKey}
+                      onSelect={(index) => {
+                        const from = history.findIndex((h) => h.month === selectedMonthKey)
+                        if (from >= 0 && index !== from) handleMonthNavigate(index - from)
+                      }}
                     />
                   )}
                   <div className="mt-auto pt-4">
@@ -522,7 +526,7 @@ export function DashboardTab({
                       navigateToTransactionsFiltered({
                         accountId: cardInvoice.accountId,
                         paymentMethod: '',
-                        competence: { key: history[history.length - 1]?.month, label: `Fatura ${cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '')} · vence ${shortDate(cardInvoice.dueDate)}` },
+                        competence: { key: selectedMonthKey || '', label: `Fatura ${cardInvoice.accountName.replace(/^cart[aã]o\s+/i, '')} · vence ${shortDate(cardInvoice.dueDate)}` },
                       } as any)
                     }
                     className="mt-3 ml-auto flex items-center gap-1 text-xs font-semibold text-[#2F68FE] hover:bg-[#EBF2FF] px-2.5 py-1 rounded-lg transition-colors cursor-pointer"

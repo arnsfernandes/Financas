@@ -1184,11 +1184,16 @@ export async function getDashboardSummary(options: DashboardFilter = {}): Promis
   )
 
   const { computeMonthlyHistory, computeSubscriptions } = await import('./dashboardExtras')
+  // O gráfico termina no mês atual (ou no selecionado, se for futuro), com o selecionado destacado:
+  // assim dá para ir a um mês anterior e voltar clicando na barra.
+  const todayKey = `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, '0')}`
+  let historyEndKey = currentKey > todayKey ? currentKey : todayKey
+  if (addMonthsToDate(`${historyEndKey}-01`, -5).slice(0, 7) > currentKey) historyEndKey = addMonthsToDate(`${currentKey}-01`, 5).slice(0, 7)
   const { getSetting } = await import('../userSettings')
   const isCardFilter = Boolean(effectivePaymentMethod && /cr[eé]dito|cart[aã]o|card/i.test(effectivePaymentMethod))
   const [monthlyHistory, subscriptions, budgetSetting] = byInvoice
     ? await Promise.all([
-        computeMonthlyHistory(supabase, accountsMap, currentKey, {
+        computeMonthlyHistory(supabase, accountsMap, historyEndKey, {
           userId: options.userId, accountId: effectiveAccountId, pix: isPixFilter, card: isCardFilter,
         }).catch(() => []),
         computeSubscriptions(supabase, currentKey, options.userId).catch(() => ({ items: [], monthlyTotal: 0 })),
